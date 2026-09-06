@@ -793,32 +793,40 @@ function compute_table_rows_for_export(
         $compare_total = isset($compare_data[$current_gl_id]) ? (float)$compare_data[$current_gl_id] : 0.0;
         
         // SPECIAL INJ-3
-        $inj3_sort_order = ($gl_code_mode === 'old') ? 17 : 18;
-        if ((int)$sort_order === $inj3_sort_order && $current_gl_id === 'INJ-3') {
-            $primary_total = 0.0;
-            $compare_total = 0.0;
-            for ($inj_number = 1; $inj_number <= 49; $inj_number++) {
-                if ($inj_number === 3) continue;
-                $inj_id = 'INJ-' . $inj_number;
-                $inj_primary = get_gl_id_total($inj_id, $gl_mapping, $gl_id_by_key, $primary_data, $p_mode);
-                $inj_compare = get_gl_id_total($inj_id, $gl_mapping, $gl_id_by_key, $compare_data, $c_mode);
-                
-                $compare_is_historical = !empty($compare_period) && is2025OrEarlier($compare_period);
-                
-                if ($inj_number === 2) {
-                    if ($compare_is_historical) {
-                        $primary_total -= $inj_primary;
-                        $compare_total -= $inj_compare;
-                    } else {
-                        $primary_total -= -$inj_primary;
-                        $compare_total -= -$inj_compare;
-                    }
-                } else {
-                    $primary_total += $inj_primary;
-                    $compare_total += $inj_compare;
-                }
-            }
+$inj3_sort_order = ($gl_code_mode === 'old') ? 17 : 18;
+if ((int)$sort_order === $inj3_sort_order && $current_gl_id === 'INJ-3') {
+    $primary_total = 0.0;
+    $compare_total = 0.0;
+    
+    // Calculate primary totals using the standard logic (no historical influence)
+    for ($inj_number = 1; $inj_number <= 49; $inj_number++) {
+        if ($inj_number === 3) continue;
+        $inj_id = 'INJ-' . $inj_number;
+        $inj_primary = get_gl_id_total($inj_id, $gl_mapping, $gl_id_by_key, $primary_data, $p_mode);
+        $inj_compare = get_gl_id_total($inj_id, $gl_mapping, $gl_id_by_key, $compare_data, $c_mode);
+        
+        // ALWAYS use the standard sign flip for PRIMARY totals
+        // This ensures primary totals are consistent regardless of compare period
+        if ($inj_number === 2) {
+            $primary_total -= -$inj_primary;  // Standard: INJ-2 is subtracted (sign flipped)
+        } else {
+            $primary_total += $inj_primary;
         }
+        
+        // For COMPARE totals, use historical logic if applicable
+        $compare_is_historical = !empty($compare_period) && is2025OrEarlier($compare_period);
+        if ($inj_number === 2) {
+            if ($compare_is_historical) {
+                // Historical: INJ-3 = INJ-1 - INJ-2 (no sign flip for INJ-2)
+                $compare_total -= $inj_compare;
+            } else {
+                $compare_total -= -$inj_compare;
+            }
+        } else {
+            $compare_total += $inj_compare;
+        }
+    }
+}
         
         if ($is_inj2) {
             $primary_total = -$primary_total;

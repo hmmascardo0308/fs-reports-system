@@ -1394,11 +1394,13 @@ $header_colors = [
 
                 <div class="filter-actions-three">
                     <button type="submit" class="btn-filter"><i class="fa-solid fa-filter"></i> Filter</button>
-                    <a href="export_comparative_page_four.php?<?= htmlspecialchars(http_build_query($_GET)) ?>" class="btn-export"><i class="fa-solid fa-file-excel"></i> Export Excel</a>
-                    <a href="?reset=1" class="btn-reset"><i class="fa-solid fa-rotate-left"></i> Clear</a>
                     <button type="button" class="btn-collapse-three" id="collapseBtnThree">
                         <i class="fa-solid fa-compress"></i> Collapse
                     </button>
+                    <a href="export_comparative_page_four.php?<?= htmlspecialchars(http_build_query($_GET)) ?>" class="btn-export"><i class="fa-solid fa-file-excel"></i> Export Excel</a>
+
+                    <a href="?reset=1" class="btn-reset"><i class="fa-solid fa-rotate-left"></i> Clear</a>
+
                 </div>
             </form>
 
