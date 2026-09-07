@@ -504,23 +504,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['do_insert'])) {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
 
-            // MODIFIED: Check for status_void and reported_status
+            // MODIFIED: Check for reported_status - PRIMARY BLOCKING CONDITION
             $checkStatusStmt = $conn->prepare("
-                SELECT status_void, reported_status, unlock_by 
+                SELECT reported_status, status_void, unlock_by 
                 FROM comparative_report 
                 WHERE region_id = ? AND area = ? AND transaction_type = ? 
-                AND transaction_month <=> ? AND status_void IS NULL 
+                AND transaction_month <=> ? 
                 LIMIT 1
             ");
             
-            // MODIFIED: Only set void status, no need for 'Locked' status
+            // MODIFIED: Only void records that are NOT reported
             $voidStmt = $conn->prepare("
                 UPDATE comparative_report 
                 SET status_void = 'Void', 
                     voided_by = ?, 
                     voided_at = ? 
                 WHERE region_id = ? AND area = ? AND transaction_type = ? 
-                AND transaction_month <=> ? AND status_void IS NULL
+                AND transaction_month <=> ? 
+                AND status_void IS NULL
+                AND (reported_status IS NULL OR reported_status = '')
             ");
 
             foreach ($paths as $path) {
@@ -896,13 +898,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['do_insert'])) {
 
                 $debugInfo[] = "Transaction types: " . implode(', ', array_column($transactionTypes, 'type'));
 
-                // MODIFIED: Check for existing records with enhanced status checking
+                // MODIFIED: Check for existing records - BLOCK if reported_status is 'Reported'
+                // CHANGED: Use region name ($region) instead of region ID ($regionID) for display keys
                 foreach ($transactionTypes as $tt) {
-                    $groupKey = $regionID . '|' . $area . '|' . $tt['type'] . '|' . ($dbTransactionMonth ?? 'NULL');
+                    // Use region name for group key
+                    $groupKey = $region . '|' . $area . '|' . $tt['type'] . '|' . ($dbTransactionMonth ?? 'NULL');
                     
                     if (!in_array($groupKey, $checkedGroups)) {
-                        $existingStatusVoid = null;
                         $existingReportedStatus = null;
+                        $existingStatusVoid = null;
                         $existingUnlockedBy = null;
                         
                         $checkStatusStmt->bind_param("ssss", $regionID, $area, $tt['type'], $dbTransactionMonth);
@@ -910,27 +914,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['do_insert'])) {
                         $checkStatusStmt->store_result();
 
                         if ($checkStatusStmt->num_rows > 0) {
-                            $checkStatusStmt->bind_result($existingStatusVoid, $existingReportedStatus, $existingUnlockedBy);
+                            $checkStatusStmt->bind_result($existingReportedStatus, $existingStatusVoid, $existingUnlockedBy);
                             $checkStatusStmt->fetch();
 
-                            // MODIFIED: Block if status_void is 'Void' OR reported_status is 'Reported'
-                            if ($existingStatusVoid === 'Void' || $existingReportedStatus === 'Reported') {
-                                $blockedRegions[] = $regionID . '-' . $area . '-' . $tt['type'];
-                                $blockedReasons[] = "Region $regionID-$area-{$tt['type']} is BLOCKED - Status Void: '$existingStatusVoid', Reported Status: '$existingReportedStatus'";
-                                $debugInfo[] = "🚫 Region is BLOCKED - Status Void: '$existingStatusVoid', Reported Status: '$existingReportedStatus'";
+                            // PRIMARY BLOCKING CONDITION: Block if reported_status is 'Reported'
+                            if ($existingReportedStatus === 'Reported') {
+                                // Use region name instead of region ID
+                                $blockedRegions[] = $region . '-' . $area . '-' . $tt['type'];
+                                $blockedReasons[] = "Region '$region'-$area-{$tt['type']}";
+                                $debugInfo[] = "🚫 Region '$region' (REGARDLESS of void status)";
                             } 
-                            // MODIFIED: Allow if status_void is NULL/empty AND unlock_by is NULL/empty/Unlocked AND reported_status is NULL/empty
-                            else if ((empty($existingStatusVoid) || $existingStatusVoid === '') && 
-                                    (empty($existingReportedStatus) || $existingReportedStatus === '') && 
-                                    (empty($existingUnlockedBy) || $existingUnlockedBy === 'Unlocked' || $existingUnlockedBy === '')) {
-                                // This is the condition where we allow uploading
-                                $existingRegions[] = $regionID . '-' . $area . '-' . $tt['type'];
-                                $debugInfo[] = "✓ Records exist but can be replaced - Status Void: '$existingStatusVoid', Unlocked By: '$existingUnlockedBy', Reported Status: '$existingReportedStatus'";
+                            // Allow if reported_status is NULL/empty (regardless of void status)
+                            else if (empty($existingReportedStatus) || $existingReportedStatus === '') {
+                                // This includes both voided and non-voided records, as long as they're not reported
+                                // Use region name instead of region ID
+                                $existingRegions[] = $region . '-' . $area . '-' . $tt['type'];
+                                $debugInfo[] = "✓ Records exist but can be replaced - Region: '$region', Reported Status: '$existingReportedStatus', Void Status: '$existingStatusVoid'";
                             } else {
-                                // Any other state - block by default for safety
-                                $blockedRegions[] = $regionID . '-' . $area . '-' . $tt['type'];
-                                $blockedReasons[] = "Region $regionID-$area-{$tt['type']} is BLOCKED - Unknown state - Status Void: '$existingStatusVoid', Unlocked By: '$existingUnlockedBy', Reported Status: '$existingReportedStatus'";
-                                $debugInfo[] = "🚫 Region is BLOCKED - Unknown state - Status Void: '$existingStatusVoid', Unlocked By: '$existingUnlockedBy', Reported Status: '$existingReportedStatus'";
+                                // Any other reported status - block by default for safety
+                                // Use region name instead of region ID
+                                $blockedRegions[] = $region . '-' . $area . '-' . $tt['type'];
+                                $blockedReasons[] = "Region '$region'-$area-{$tt['type']} is BLOCKED - Unknown Reported Status: '$existingReportedStatus'";
+                                $debugInfo[] = "🚫 Region '$region' is BLOCKED - Unknown Reported Status: '$existingReportedStatus'";
                             }
                         } else {
                             $debugInfo[] = "No existing records found for " . $tt['type'];
@@ -940,26 +945,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['do_insert'])) {
                     }
                 }
 
-                // Check if any region is blocked
+                // Check if any region is blocked - using region name
                 $regionBlocked = false;
                 foreach ($transactionTypes as $tt) {
-                    if (in_array($regionID . '-' . $area . '-' . $tt['type'], $blockedRegions)) {
+                    if (in_array($region . '-' . $area . '-' . $tt['type'], $blockedRegions)) {
                         $regionBlocked = true;
                         break;
                     }
                 }
                 if ($regionBlocked) {
-                    $debugInfo[] = "✗ SKIPPING - Region is blocked (Voided or Reported)";
+                    $debugInfo[] = "✗ SKIPPING - Region '$region' is blocked (Reported status)";
                     continue;
                 }
 
-                // MODIFIED: Handle force insert - void existing records
+                // MODIFIED: Handle force insert - void existing records (only if NOT reported)
                 if ($forceInsert) {
                     foreach ($transactionTypes as $tt) {
-                        $groupKey = $regionID . '|' . $area . '|' . $tt['type'] . '|' . ($dbTransactionMonth ?? 'NULL');
+                        $groupKey = $region . '|' . $area . '|' . $tt['type'] . '|' . ($dbTransactionMonth ?? 'NULL');
                         if (!in_array($groupKey, $voidedGroups)) {
-                            // Check if records exist before voiding
-                            $checkExists = $conn->prepare("SELECT COUNT(*) FROM comparative_report WHERE region_id = ? AND area = ? AND transaction_type = ? AND transaction_month <=> ? AND status_void IS NULL");
+                            // Check if records exist AND are NOT reported before voiding
+                            $checkExists = $conn->prepare("SELECT COUNT(*) FROM comparative_report WHERE region_id = ? AND area = ? AND transaction_type = ? AND transaction_month <=> ? AND status_void IS NULL AND (reported_status IS NULL OR reported_status = '')");
                             $checkExists->bind_param("ssss", $regionID, $area, $tt['type'], $dbTransactionMonth);
                             $checkExists->execute();
                             $count = 0;
@@ -979,15 +984,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['do_insert'])) {
                                 );
                                 $voidStmt->execute();
                                 $voidedGroups[] = $groupKey;
-                                $debugInfo[] = "✓ Voided existing records for " . $tt['type'] . " (force insert enabled)";
+                                $debugInfo[] = "✓ Voided existing records for " . $tt['type'] . " (force insert enabled - records were NOT reported)";
                             }
                         }
                     }
                 } else {
-                    // Check if any existing regions exist without force insert
+                    // Check if any existing regions exist without force insert - using region name
                     $hasExisting = false;
                     foreach ($transactionTypes as $tt) {
-                        if (in_array($regionID . '-' . $area . '-' . $tt['type'], $existingRegions)) {
+                        if (in_array($region . '-' . $area . '-' . $tt['type'], $existingRegions)) {
                             $hasExisting = true;
                             break;
                         }
@@ -1117,7 +1122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['do_insert'])) {
             $dateObj = ($dbTransactionMonth) ? DateTime::createFromFormat('Y-m-d', $dbTransactionMonth) : false;
             $monthDisplay = $dateObj ? $dateObj->format('F Y') : ($transactionMonth ? date('F', mktime(0, 0, 0, (int)$transactionMonth, 1)) . ' ' . $transactionYear : $transactionYear);
 
-            // MODIFIED: Check if any regions are blocked
+            // MODIFIED: Check if any regions are blocked due to reported status
             if (!empty($blockedRegions)) {
                 $conn->rollback();
                 $blockedRegions = array_unique($blockedRegions);
@@ -1126,7 +1131,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['do_insert'])) {
                 
                 $_SESSION['upload_message'] = "<div class='error'>
                     <strong>⛔ Upload Blocked!</strong><br><br>
-                    The following regions cannot be updated: <strong>{$regionList}</strong>. They are either <strong>VOIDED</strong> or have been <strong>REPORTED</strong>.<br><br>
+                    The following regions cannot be updated: <strong>{$regionList}</strong>.<br>
+                    These records have been <strong>REPORTED</strong> and cannot be modified or replaced.<br>
+                    <br>
+                    <strong>Affected records:</strong><br>
+                    {$blockedReasonsList}
                 </div>";
 
                 foreach ($paths as $p) {
@@ -1148,8 +1157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['do_insert'])) {
                 $confirmPaths = $paths;
                 $duplicateMessage = "<i class='fa-solid fa-circle-info'></i> <strong>Existing Records Found</strong><br>
                     Transactions for the following regions already exist for {$monthDisplay}:<br>
-                    <strong>{$regionList}</strong><br><br>
-                    These records are currently in an <strong>editable state</strong>.";
+                    <strong>{$regionList}</strong>";
             } else {
                 $conn->commit();
                 foreach ($paths as $p) {
@@ -1534,9 +1542,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['do_insert'])) {
                 <br><br>
                 <strong>What will happen:</strong>
                 <ul>
-                    <li>New records will be inserted with the updated data</li>
+                    <li>New records will be inserted as an updated data</li>
                     <li>Old records will be marked as <strong>VOID</strong></li>
-                    <!-- <li>Old records will have <strong>voided_by</strong> and <strong>voided_at</strong> set</li> -->
                 </ul>
                 <strong style="color:#e53e3e;">Do you want to insert new records and void the previous?</strong>
             </div>

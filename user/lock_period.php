@@ -1,4 +1,5 @@
 <?php
+// lock_period.php
 session_start();
 require_once __DIR__ . '/../config/config.php';
 
@@ -57,6 +58,22 @@ $stmt = $conn->prepare($query);
 $stmt->bind_param("ss", $start_date, $end_date);
 $stmt->execute();
 $result = $stmt->get_result();
+
+// Get general reported status info
+$general_reported_status = null;
+$general_reported_by = null;
+$general_reported_date = null;
+
+if ($result && $result->num_rows > 0) {
+    // Get the first row to check reported status (assuming all rows have same reported status)
+    $first_row = $result->fetch_assoc();
+    $general_reported_status = $first_row['reported_status'] ?? null;
+    $general_reported_by = $first_row['reported_status_by'] ?? null;
+    $general_reported_date = $first_row['reported_status_date'] ?? null;
+    
+    // Reset pointer to beginning
+    $result->data_seek(0);
+}
 ?>
 
 <!DOCTYPE html>
@@ -68,6 +85,66 @@ $result = $stmt->get_result();
     <link rel="stylesheet" href="css/lock_unlock.css?v=<?= time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
    
+    <style>
+        /* Note styling */
+         .info-note {
+            background: #e7f3ff;
+            border-left: 4px solid #0066cc;
+            padding: 8px 18px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 14px;
+            color: #004080;
+        }
+        .info-note i {
+            font-size: 18px;
+            color: #0066cc;
+            margin-top: 2px;
+        }
+        .info-note strong {
+            color: #003366;
+        }
+
+        /* General Info Box */
+        .general-info-box {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 12px 20px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .general-info-box .info-label {
+            font-weight: 600;
+            color: #495057;
+            margin-right: 5px;
+        }
+        .general-info-box .info-value {
+            color: #212529;
+        }
+        .badge-reported {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #28a745;
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 12px;
+        }
+        .badge-not-reported {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #dc3545;
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 12px;
+        }
+    </style>
 </head>
 <body>
 
@@ -107,6 +184,56 @@ $result = $stmt->get_result();
                 </form>
             </div>
 
+            <!-- Info Note about Void Status -->
+            <?php 
+            $has_void_records = false;
+            if ($result && $result->num_rows > 0) {
+                $result->data_seek(0);
+                while ($row = $result->fetch_assoc()) {
+                    if ($row['void_region_count'] > 0) {
+                        $has_void_records = true;
+                        break;
+                    }
+                }
+                $result->data_seek(0);
+            }
+            
+            if ($has_void_records):
+            ?>
+            <div class="info-note">
+                <i class="fas fa-info-circle"></i>
+                <div>
+                    <strong>Note:</strong> Void statuses indicate previous data replaced by newly uploaded data for the same region or region-area.
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <!-- General Reported Status Info -->
+            <?php if ($result && $result->num_rows > 0): ?>
+            <div class="general-info-box">
+                <div>
+                    <span class="info-label"><i class="fas fa-flag"></i> Status:</span>
+                    <span class="info-value">
+                        <?php if ($general_reported_status === 'Reported'): ?>
+                            <span class="badge-reported"><i class="fas fa-check-circle"></i> Reported</span>
+                        <?php else: ?>
+                            <span class="badge-not-reported"><i class="fas fa-times-circle"></i> Not Reported</span>
+                        <?php endif; ?>
+                    </span>
+                </div>
+                <?php if (!empty($general_reported_by) && !empty($general_reported_date)): ?>
+                <div>
+                    <span class="info-label"><i class="fas fa-user-check"></i> Reported By:</span>
+                    <span class="info-value"><?php echo htmlspecialchars($general_reported_by); ?></span>
+                </div>
+                <div>
+                    <span class="info-label"><i class="fas fa-calendar-alt"></i> Reported Date:</span>
+                    <span class="info-value"><?php echo date('F d, Y h:i A', strtotime($general_reported_date)); ?></span>
+                </div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+
             <!-- Summary Statistics -->
             <?php 
             $total_records = 0;
@@ -115,8 +242,6 @@ $result = $stmt->get_result();
             $unique_types = [];
             $total_void_region_areas = 0;
             $groups_with_void = 0;
-            $total_reported = 0;
-            $total_not_reported = 0;
             
             if ($result && $result->num_rows > 0) {
                 $result->data_seek(0); // Reset pointer
@@ -130,13 +255,6 @@ $result = $stmt->get_result();
                     if ($row['void_region_count'] > 0) {
                         $total_void_region_areas += $row['void_region_count'];
                         $groups_with_void++;
-                    }
-                    
-                    // Count reported status
-                    if (!empty($row['reported_status']) && $row['reported_status'] === 'Reported') {
-                        $total_reported++;
-                    } else {
-                        $total_not_reported++;
                     }
                 }
                 $result->data_seek(0); // Reset pointer again for display
@@ -164,15 +282,14 @@ $result = $stmt->get_result();
                     <div class="stat-label">Void Region-Areas</div>
                     <div class="stat-value" style="color: #dc3545;"><?php echo number_format($total_void_region_areas); ?></div>
                 </div>
-                <div class="stat-item">
-                    <div class="stat-label">Reported Groups</div>
-                    <div class="stat-value" style="color: #28a745;"><?php echo $total_reported; ?></div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-label">Not Reported Groups</div>
-                    <div class="stat-value" style="color: #ffc107;"><?php echo $total_not_reported; ?></div>
-                </div>
             </div>
+
+
+            <div class="action-buttons-container">
+                    <a href="mark_reported.php" class="btn-report" style="text-decoration: none;"><i class="fas fa-check-circle"></i> Mark as Reported</a>
+                    <a href="unlock_period.php" class="btn-unlock" style="text-decoration: none;"><i class="fa-solid fa-ban"></i> Unvoid</a>
+
+                </div>
 
             <!-- Data Table -->
             <div class="table-container">
@@ -186,8 +303,6 @@ $result = $stmt->get_result();
                             <th><i class="fa-solid fa-table-list"></i> Record Count</th>
                             <th><i class="fa-solid fa-clipboard-check"></i> Void Status</th>
                             <th><i class="fa-solid fa-ban"></i> Voided By / Date</th>
-                            <th><i class="fa-solid fa-flag"></i> Reported Status</th>
-                            <th><i class="fa-solid fa-user-check"></i> Reported By / Date</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -218,34 +333,11 @@ $result = $stmt->get_result();
                                             <span class="audit-info text-muted">—</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td style="text-align: center;">
-                                        <?php 
-                                        if (!empty($row['reported_status']) && $row['reported_status'] === 'Reported') {
-                                            echo '<span class="badge-reported" style="background-color: #28a745; color: white; padding: 4px 12px; border-radius: 12px; font-weight: bold; display: inline-block;">
-                                                    <i class="fas fa-check-circle"></i> Reported
-                                                  </span>';
-                                        } else {
-                                            echo '<span class="badge-not-reported" style="font-style: italic; color: #4b4c4d; font-size: 13px;">
-                                                    <i class="fas fa-clock"></i> Not Reported
-                                                  </span>';
-                                        }
-                                        ?>
-                                    </td>
-                                    <td>
-                                        <?php if (!empty($row['reported_status_by']) && !empty($row['reported_status_date'])): ?>
-                                            <span class="audit-info">
-                                                <i class="fas fa-user-check"></i> <?php echo htmlspecialchars($row['reported_status_by']); ?><br>
-                                                <small><?php echo date('M d, Y h:i A', strtotime($row['reported_status_date'])); ?></small>
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="audit-info text-muted">—</span>
-                                        <?php endif; ?>
-                                    </td>
                                 </tr>
                             <?php endwhile; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="9" class="no-data">
+                                <td colspan="7" class="no-data">
                                     <i class="fas fa-inbox" style="font-size: 48px; color: #dee2e6; margin-bottom: 10px;"></i>
                                     <br>
                                     No uploaded reports found for <?php echo date('F Y', strtotime($selected_month . '-01')); ?>.

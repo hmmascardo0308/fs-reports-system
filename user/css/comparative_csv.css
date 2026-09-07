@@ -5,7 +5,7 @@
     --card-shadow: 0 4px 12px rgba(0,0,0,0.1);
     --text: #000000;
     --success: #48bb78;
-    --error: #f56565;
+    --error: #3d3d3d;
     --red-gradient: linear-gradient(45deg, #ff170f, #b50006);
     --red-gradient-light: linear-gradient(90deg, rgb(255, 202, 202) 0%, #ff9696 50%, #ff2323c0 100%);
 }

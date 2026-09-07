@@ -338,8 +338,8 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                             </a>
                         </li>
                         <li>
-                            <a href="javascript:void(0)" onclick="openLockUnlockModal()">
-                                <i class="fas fa-lock"></i> Lock / Unlock Period
+                            <a href="unlock_period.php">
+                                <i class="fa-solid fa-clipboard"></i> Monthly Data
                             </a>
                         </li>
                         <li>
@@ -465,9 +465,12 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                     <div>
                         <span class="info-label">Last Login:</span>
                         <?php
-                            echo $last_online 
-                                ? date('F j, Y h:i:s A', strtotime($last_online)) 
-                                : 'N/A';
+                            // Ensure $last_online is set and not null before using it
+                            if (isset($last_online) && !empty($last_online)) {
+                                echo date('F j, Y h:i:s A', strtotime($last_online));
+                            } else {
+                                echo 'N/A';
+                            }
                         ?>
                     </div>
                 </div>
@@ -513,26 +516,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
         </div>
     </div>
 
-    <!-- Lock/Unlock Selection Modal -->
-    <div id="lockUnlockModal" class="password-modal">
-        <div class="password-modal-content" style="max-width: 400px; text-align: center; position: relative;">
-            <span onclick="closeLockUnlockModal()" style="position: absolute; right: 15px; top: 15px; cursor: pointer; font-size: 24px; color: #888; line-height: 1;">&times;</span>
-            <h2 style="margin-top: 10px; margin-bottom: 20px; color: #333; font-size: 1.5rem;">
-                <i class="fas fa-calendar-alt" style="color: #007bff; margin-right: 10px;"></i>Manage Period
-            </h2>
-            <p style="margin-bottom: 30px; color: #666; font-size: 1rem;">Please select an action to proceed:</p>
-            
-            <div style="display: flex; flex-direction: column; gap: 15px;">
-                <a href="lock_period.php" class="btn" style="background-color: #dc3545; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; transition: background 0.3s; display: block;">
-                    <i class="fas fa-lock" style="margin-right: 8px;"></i> Lock Period
-                </a>
-                <a href="unlock_period.php" class="btn" style="background-color: #28a745; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; transition: background 0.3s; display: block;">
-                    <i class="fas fa-unlock" style="margin-right: 8px;"></i> Unlock Period
-                </a>
-            </div>
-        </div>
-    </div>
-
     <!-- Comparative Report Selection Modal -->
     <div id="comparativeReportModal" class="password-modal">
         <div class="password-modal-content" style="max-width: 450px; text-align: center; position: relative;">
@@ -546,14 +529,10 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                 <a href="settings.php" class="btn" style="background-color: #007bff; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; transition: background 0.3s; display: block;">
                     <i class="fas fa-file-excel" style="margin-right: 8px;"></i> Comparative Report
                 </a>
-                <a href="comparative_report_raw_data.php" class="btn" style="background-color: #6f42c1; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; transition: background 0.3s; display: block;">
+                <a href="#" class="btn" style="background-color: #6f42c1; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; transition: background 0.3s; display: block; cursor: not-allowed; opacity: 0.7;" onclick="event.preventDefault(); alert('This feature is coming soon!');">
                     <i class="fas fa-database" style="margin-right: 8px;"></i> Comparative Report (From Raw Data)
+                    <span style="font-size: 0.7rem; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 12px; margin-left: 5px;">Coming Soon</span>
                 </a>
-
-                <!-- <a href="#" class="btn" style="background-color: #6f42c1; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; transition: background 0.3s; display: block; cursor: not-allowed; opacity: 0.7;" onclick="event.preventDefault(); alert('This feature is coming soon!');">
-    <i class="fas fa-database" style="margin-right: 8px;"></i> Comparative Report (From Raw Data) 
-    <span style="font-size: 0.7rem; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 12px; margin-left: 5px;">Coming Soon</span>
-</a> -->
             </div>
         </div>
     </div>
@@ -571,14 +550,10 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                 <a href="mark_reported.php" class="btn" style="background-color: #28a745; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; transition: background 0.3s; display: block;">
                     <i class="fas fa-file-excel" style="margin-right: 8px;"></i> Mark Transactions as Reported
                 </a>
-                <!-- <a href="mark_reported_raw.php" class="btn" style="background-color: #6f42c1; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; transition: background 0.3s; display: block;">
-                    <i class="fas fa-database" style="margin-right: 8px;"></i> Mark Transactions as Reported (From Raw Data)
-                </a> -->
-
                 <a href="#" class="btn" style="background-color: #6f42c1; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; transition: background 0.3s; display: block; cursor: not-allowed; opacity: 0.7;" onclick="event.preventDefault(); alert('This feature is coming soon!');">
-    <i class="fas fa-database" style="margin-right: 8px;"></i> Mark Transactions as Reported (From Raw Data)
-    <span style="font-size: 0.7rem; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 12px; margin-left: 5px;">Coming Soon</span>
-</a>
+                    <i class="fas fa-database" style="margin-right: 8px;"></i> Mark Transactions as Reported (From Raw Data)
+                    <span style="font-size: 0.7rem; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 12px; margin-left: 5px;">Coming Soon</span>
+                </a>
             </div>
         </div>
     </div>
@@ -603,14 +578,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
         // Close modal
         function closeModal() {
             document.getElementById('passwordChangeModal').classList.remove('show');
-        }
-
-        function openLockUnlockModal() {
-            document.getElementById('lockUnlockModal').classList.add('show');
-        }
-
-        function closeLockUnlockModal() {
-            document.getElementById('lockUnlockModal').classList.remove('show');
         }
 
         function openFileUploadModal() {

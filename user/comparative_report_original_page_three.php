@@ -918,7 +918,7 @@ $previous_year_display = !empty($previous_year_period) ? strtoupper(date('F Y', 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COMPARATIVE PROFIT & LOSS STATEMENT</title>
+    <title>COMPARATIVE P&L STATEMENT</title>
     <link rel="icon" href="../images/MLW%20Logo.png" type="image/png"/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/comparative_original.css?v=<?= time(); ?>">
