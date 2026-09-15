@@ -267,9 +267,9 @@ if ($gl_code_mode === 'mixed') {
         'INS-5' => ['INS-20', 'INS-21', 'INS-22', 'INS-23', 'INS-24', 'INS-37', 'INS-41'],
         'INS-6' => ['INS-1', 'INS-2', 'INS-3', 'INS-4', 'INS-5', 'INS-6', 'INS-7', 'INS-8', 'INS-9', 'INS-10', 'INS-11', 'INS-12', 'INS-13', 'INS-14', 'INS-35', 'INS-36', 'INS-40'],
         'INS-7' => ['INS-15', 'INS-16','INS-17','INS-18','INS-19'],
-        'INS-8' => ['INS-38'],
-        'INS-9' => ['INS-48'],
-        'INS-10' => ['INS-49']
+        'INS-10' => ['INS-38'],
+        'INS-11' => ['INS-48'],
+        'INS-12' => ['INS-49']
     ];
 }
 
@@ -965,7 +965,7 @@ if (!empty($selected_branches)) {
 <body>
     <main class="main-content">
         <header class="top-bar">
-            <h2><a href="comparative_report_raw_data.php" style="font-size: 16px; text-decoration: none;">⬅ Back</a></h2>
+            <h2><a href="settings.php" style="font-size: 16px; text-decoration: none;">⬅ Back</a></h2>
             <div class="user-badge">
                 <span><?php echo htmlspecialchars($username); ?> (<?php echo htmlspecialchars($user_type); ?>)</span>
                 <div class="avatar"><?php echo strtoupper(substr($full_name, 0, 1)); ?></div>

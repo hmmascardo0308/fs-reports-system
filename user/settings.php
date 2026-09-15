@@ -1003,6 +1003,149 @@ $comps_by_desc_json =
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
     >
 
+    <style>
+        /* Report chooser modal styles */
+        .report-modal {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .report-modal.open {
+            display: flex;
+        }
+
+        .report-modal-content {
+            background-color: #fff;
+            border-radius: 12px;
+            width: 420px;
+            max-width: 92%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: reportModalIn 0.2s ease-out;
+            overflow: hidden;
+        }
+
+        @keyframes reportModalIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.97);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .report-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .report-modal-header h3 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .report-modal-close {
+            font-size: 26px;
+            line-height: 1;
+            color: #999;
+            cursor: pointer;
+            transition: color 0.15s;
+            user-select: none;
+        }
+
+        .report-modal-close:hover {
+            color: #de0000;
+        }
+
+        .report-modal-body {
+            padding: 18px 20px 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .report-option {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            text-decoration: none;
+            color: #2c3e50;
+            transition: all 0.15s ease;
+            cursor: pointer;
+            background: #fff;
+        }
+
+        .report-option:hover {
+            border-color: #de0000;
+            background: #fff5f5;
+            transform: translateX(3px);
+        }
+
+        .report-option i {
+            font-size: 18px;
+            color: #de0000;
+            width: 22px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .report-option-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .report-option-text strong {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .report-option-text span {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 2px;
+        }
+
+        .report-modal-footer {
+            padding: 12px 20px 18px;
+            text-align: right;
+        }
+
+        .report-modal-footer button {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 8px;
+            background: #e9ecef;
+            color: #555;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .report-modal-footer button:hover {
+            background: #dee2e6;
+        }
+    </style>
+
 </head>
 
 <body>
@@ -1498,7 +1641,7 @@ $comps_by_desc_json =
 
 
         <!-- =========================================================
-             LINKS
+             LINKS (Report chooser modals)
         ========================================================== -->
 
         <div
@@ -1512,24 +1655,26 @@ $comps_by_desc_json =
             "
         >
 
-            <a
-                href="comparative_report_original.php"
-                class="btn-preview"
+            <button
+                type="button"
+                class="btn-preview report-trigger"
+                data-report="original"
                 style="text-decoration: none;"
             >
                 <i class="fa-solid fa-file"></i>
                 Comparative Report (Original Data)
-            </a>
+            </button>
 
 
-            <a
-                href="manual_adjustment_new.php"
-                class="btn-preview"
+            <button
+                type="button"
+                class="btn-preview report-trigger"
+                data-report="manual"
                 style="text-decoration: none;"
             >
                 <i class="fa-solid fa-file"></i>
                 Comparative Report (Manual Adjustment)
-            </a>
+            </button>
 
 
             <a
@@ -1546,6 +1691,118 @@ $comps_by_desc_json =
     </div>
 
 </main>
+
+
+<!-- =============================================================
+     REPORT CHOOSER MODAL — Original Data
+============================================================== -->
+
+<div
+    id="reportModalOriginal"
+    class="report-modal"
+    aria-hidden="true"
+>
+    <div class="report-modal-content">
+
+        <div class="report-modal-header">
+
+            <h3>
+                <i class="fa-solid fa-file" style="color:#de0000;margin-right:8px;"></i>
+                Comparative Report (Original Data)
+            </h3>
+
+            <span class="report-modal-close" data-close="reportModalOriginal">
+                &times;
+            </span>
+
+        </div>
+
+        <div class="report-modal-body">
+
+            <a
+                href="comparative_report_original.php"
+                class="report-option"
+            >
+                <i class="fa-solid fa-map-location-dot"></i>
+                <span class="report-option-text">
+                    <strong>From Per Region - Area data</strong>
+                </span>
+            </a>
+
+            <a
+                href="comparative_report_original_raw.php"
+                class="report-option"
+            >
+                <i class="fa-solid fa-database"></i>
+                <span class="report-option-text">
+                    <strong>From Raw Data Per Zone</strong>
+                </span>
+            </a>
+
+        </div>
+
+        <div class="report-modal-footer">
+            <button type="button" data-close="reportModalOriginal">Cancel</button>
+        </div>
+
+    </div>
+</div>
+
+
+<!-- =============================================================
+     REPORT CHOOSER MODAL — Manual Adjustment
+============================================================== -->
+
+<div
+    id="reportModalManual"
+    class="report-modal"
+    aria-hidden="true"
+>
+    <div class="report-modal-content">
+
+        <div class="report-modal-header">
+
+            <h3>
+                <i class="fa-solid fa-file" style="color:#de0000;margin-right:8px;"></i>
+                Comparative Report (Manual Adjustment)
+            </h3>
+
+            <span class="report-modal-close" data-close="reportModalManual">
+                &times;
+            </span>
+
+        </div>
+
+        <div class="report-modal-body">
+
+            <a
+                href="manual_adjustment_new.php"
+                class="report-option"
+            >
+                <i class="fa-solid fa-map-location-dot"></i>
+                <span class="report-option-text">
+                    <strong>From Per Region - Area data</strong>
+                </span>
+            </a>
+
+            <a
+                href="manual_adjustment_new_raw.php"
+                class="report-option"
+            >
+                <i class="fa-solid fa-database"></i>
+                <span class="report-option-text">
+                    <strong>From Raw Data Per Zone</strong>
+                </span>
+            </a>
+
+        </div>
+
+        <div class="report-modal-footer">
+            <button type="button" data-close="reportModalManual">Cancel</button>
+        </div>
+
+    </div>
+</div>
 
 
 <!-- =============================================================
@@ -3303,6 +3560,86 @@ if (statusModal) {
     );
 
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| Report chooser modals
+|--------------------------------------------------------------------------
+*/
+
+document
+    .querySelectorAll('.report-trigger')
+    .forEach(trigger => {
+
+        trigger.addEventListener('click', function () {
+
+            const report = this.dataset.report;
+
+            let modalId = '';
+
+            if (report === 'original') {
+                modalId = 'reportModalOriginal';
+            } else if (report === 'manual') {
+                modalId = 'reportModalManual';
+            }
+
+            if (modalId) {
+
+                const m = document.getElementById(modalId);
+
+                if (m) {
+                    m.classList.add('open');
+                    m.setAttribute('aria-hidden', 'false');
+                }
+
+            }
+
+        });
+
+    });
+
+
+document
+    .querySelectorAll('[data-close]')
+    .forEach(el => {
+
+        el.addEventListener('click', function () {
+
+            const modalId = this.dataset.close;
+
+            if (modalId) {
+
+                const m = document.getElementById(modalId);
+
+                if (m) {
+                    m.classList.remove('open');
+                    m.setAttribute('aria-hidden', 'true');
+                }
+
+            }
+
+        });
+
+    });
+
+
+document
+    .querySelectorAll('.report-modal')
+    .forEach(m => {
+
+        m.addEventListener('click', e => {
+
+            if (e.target === m) {
+
+                m.classList.remove('open');
+                m.setAttribute('aria-hidden', 'true');
+
+            }
+
+        });
+
+    });
 
 
 /*

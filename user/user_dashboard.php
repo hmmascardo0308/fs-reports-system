@@ -34,7 +34,7 @@ if (!empty($username)) {
     $stmt = $conn->prepare("
         SELECT last_online, password 
         FROM qcl_user 
-        WHERE username = ?
+        WHERE username = ? 
         LIMIT 1
     ");
     $stmt->bind_param("s", $username);
@@ -349,7 +349,7 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                         </li>
                         <?php if ($user_type === "admin" || $user_type === "reports") : ?>
                             <li>
-                                <a href="javascript:void(0)" onclick="openComparativeReportModal()">
+                                <a href="settings.php">
                                     <i class="fas fa-chart-pie"></i> Comparative Report
                                 </a>
                             </li>
@@ -516,27 +516,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
         </div>
     </div>
 
-    <!-- Comparative Report Selection Modal -->
-    <div id="comparativeReportModal" class="password-modal">
-        <div class="password-modal-content" style="max-width: 450px; text-align: center; position: relative;">
-            <span onclick="closeComparativeReportModal()" style="position: absolute; right: 15px; top: 15px; cursor: pointer; font-size: 24px; color: #888; line-height: 1;">&times;</span>
-            <h2 style="margin-top: 10px; margin-bottom: 20px; color: #333; font-size: 1.5rem;">
-                <i class="fas fa-chart-pie" style="color: #007bff; margin-right: 10px;"></i>Comparative Report
-            </h2>
-            <p style="margin-bottom: 30px; color: #666; font-size: 1rem;">Please select the data source for the comparative report:</p>
-            
-            <div style="display: flex; flex-direction: column; gap: 15px;">
-                <a href="settings.php" class="btn" style="background-color: #007bff; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; transition: background 0.3s; display: block;">
-                    <i class="fas fa-file-excel" style="margin-right: 8px;"></i> Comparative Report
-                </a>
-                <a href="#" class="btn" style="background-color: #6f42c1; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; transition: background 0.3s; display: block; cursor: not-allowed; opacity: 0.7;" onclick="event.preventDefault(); alert('This feature is coming soon!');">
-                    <i class="fas fa-database" style="margin-right: 8px;"></i> Comparative Report (From Raw Data)
-                    <span style="font-size: 0.7rem; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 12px; margin-left: 5px;">Coming Soon</span>
-                </a>
-            </div>
-        </div>
-    </div>
-
     <!-- Reported Transactions Selection Modal -->
     <div id="reportedTransactionsModal" class="password-modal">
         <div class="password-modal-content" style="max-width: 450px; text-align: center; position: relative;">
@@ -586,15 +565,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
 
         function closeUploadFileModal() {
             document.getElementById('uploadFileModal').classList.remove('show');
-        }
-
-        // Comparative Report Modal functions
-        function openComparativeReportModal() {
-            document.getElementById('comparativeReportModal').classList.add('show');
-        }
-
-        function closeComparativeReportModal() {
-            document.getElementById('comparativeReportModal').classList.remove('show');
         }
 
         // Reported Transactions Modal functions

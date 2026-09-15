@@ -92,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $conn,
             "SELECT sub_order FROM fs_reports.gl_codes_new WHERE description = ? AND gl_description_comparative = ? LIMIT 1"
         );
-        if ($stmt) {
+        if ($stmt) {    
             mysqli_stmt_bind_param($stmt, 'ss', $desc, $comp);
             mysqli_stmt_execute($stmt);
             mysqli_stmt_bind_result($stmt, $value);
@@ -102,23 +102,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         return $value;
     };
 
-    $get_existing_desc_info = function($desc) use ($conn) {
-        $info = ['sort_order' => null, 'prefix' => null];
-        $stmt = mysqli_prepare($conn, "SELECT sort_order, gl_id FROM fs_reports.gl_codes_new WHERE description = ? LIMIT 1");
-        if ($stmt) {
-            mysqli_stmt_bind_param($stmt, 's', $desc);
-            mysqli_stmt_execute($stmt);
-            $existing_gl_id = null;
-            mysqli_stmt_bind_result($stmt, $info['sort_order'], $existing_gl_id);
-            if (mysqli_stmt_fetch($stmt) && $existing_gl_id) {
-                $parts = explode('-', $existing_gl_id);
-                $info['prefix'] = $parts[0];
-            }
-            mysqli_stmt_close($stmt);
+   $get_existing_desc_info = function($desc) use ($conn) {
+    $info = ['sort_order' => null, 'prefix' => null];
+    $existing_gl_id = null;  // Initialize to null
+    
+    $stmt = mysqli_prepare($conn, "SELECT sort_order, gl_id FROM fs_reports.gl_codes_new WHERE description = ? LIMIT 1");
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, 's', $desc);
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_bind_result($stmt, $info['sort_order'], $existing_gl_id);
+        if (mysqli_stmt_fetch($stmt) && $existing_gl_id !== null) {
+            $parts = explode('-', $existing_gl_id);
+            $info['prefix'] = $parts[0] ?? null;  // Safe fallback
         }
-        return $info;
-    };
-
+        mysqli_stmt_close($stmt);
+    }
+    return $info;
+};
     $generate_new_prefix = function($description) use ($conn) {
         $clean = strtoupper(preg_replace('/[^A-Za-z]/', '', $description));
         if (strlen($clean) < 3) $clean = str_pad($clean, 3, 'X');

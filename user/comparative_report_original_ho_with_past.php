@@ -383,9 +383,9 @@ if ($gl_code_mode === 'mixed') {
             'INS-19'
         ],
 
-        'INS-8' => ['INS-38'],
-        'INS-9' => ['INS-48'],
-        'INS-10' => ['INS-49'],
+        'INS-10' => ['INS-38'],
+        'INS-11' => ['INS-48'],
+        'INS-12' => ['INS-49'],
 
 // VEHICLE GL MAPPING
 
