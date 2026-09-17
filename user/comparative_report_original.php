@@ -564,7 +564,7 @@ foreach ($grouped_rows as $sort_order => $rows) {
     // Insert TOTAL REVENUES summary row after the sort_order 20 block
     if ((int)$sort_order == 20) {
         $inc_dec_rev = $rev_tot_p - $rev_tot_prev;
-        $pct_rev = ($rev_tot_prev != 0) ? ($inc_dec_rev / abs($rev_tot_prev)) * 100 : ($rev_tot_p != 0 ? 100 : 0);
+        $pct_rev = ($rev_tot_prev != 0) ? ($inc_dec_rev / $rev_tot_prev) * 100 : ($rev_tot_p != 0 ? 100 : 0);
 
         $final_table_rows[] = [
             'sort_order' => 'TOTAL REVENUES',
@@ -610,7 +610,7 @@ foreach ($grouped_rows as $sort_order => $rows) {
         $gp_tot_prev = $rev_tot_prev - $total_previous_total;
         
         $inc_dec_gp = $gp_tot_p - $gp_tot_prev;
-        $pct_gp = ($gp_tot_prev != 0) ? ($inc_dec_gp / abs($gp_tot_prev)) * 100 : ($gp_tot_p != 0 ? 100 : 0);
+        $pct_gp = ($gp_tot_prev != 0) ? ($inc_dec_gp / $gp_tot_prev) * 100 : ($gp_tot_p != 0 ? 100 : 0);
 
         $final_table_rows[] = [
             'sort_order' => 'GROSS PROFIT',
@@ -649,7 +649,7 @@ foreach ($grouped_rows as $sort_order => $rows) {
     // Insert TOTAL SELLING AND ADMIN EXPENSES summary row after sort_order 23
     if ((int)$sort_order == 23) {
         $inc_dec_sa = $sa_tot_p - $sa_tot_prev;
-        $pct_sa = ($sa_tot_prev != 0) ? ($inc_dec_sa / abs($sa_tot_prev)) * 100 : ($sa_tot_p != 0 ? 100 : 0);
+        $pct_sa = ($sa_tot_prev != 0) ? ($inc_dec_sa / $sa_tot_prev) * 100 : ($sa_tot_p != 0 ? 100 : 0);
 
         $final_table_rows[] = [
             'sort_order' => 'TOTAL SELLING AND ADMIN EXPENSES',
@@ -676,7 +676,7 @@ foreach ($grouped_rows as $sort_order => $rows) {
         $ebitda_tot_prev = $gp_tot_prev - $sa_tot_prev;
 
         $inc_dec_ebitda = $ebitda_tot_p - $ebitda_tot_prev;
-        $pct_ebitda = ($ebitda_tot_prev != 0) ? ($inc_dec_ebitda / abs($ebitda_tot_prev)) * 100 : ($ebitda_tot_p != 0 ? 100 : 0);
+        $pct_ebitda = ($ebitda_tot_prev != 0) ? ($inc_dec_ebitda / $ebitda_tot_prev) * 100 : ($ebitda_tot_p != 0 ? 100 : 0);
 
         $final_table_rows[] = [
             'sort_order' => "EARNINGS BEFORE INTEREST, TAXES, DEP'N, & AMORT",
@@ -706,7 +706,7 @@ foreach ($grouped_rows as $sort_order => $rows) {
         $ebit_tot_prev = $ebitda_tot_prev - $total_previous_total;
 
         $inc_dec_ebit = $ebit_tot_p - $ebit_tot_prev;
-        $pct_ebit = ($ebit_tot_prev != 0) ? ($inc_dec_ebit / abs($ebit_tot_prev)) * 100 : ($ebit_tot_p != 0 ? 100 : 0);
+        $pct_ebit = ($ebit_tot_prev != 0) ? ($inc_dec_ebit / $ebit_tot_prev) * 100 : ($ebit_tot_p != 0 ? 100 : 0);
 
         $final_table_rows[] = ['is_manual_spacer' => true];
 
@@ -738,7 +738,7 @@ foreach ($grouped_rows as $sort_order => $rows) {
         $ebt_tot_prev = $ebit_tot_prev - $total_previous_total;
 
         $inc_dec_ebt = $ebt_tot_p - $ebt_tot_prev;
-        $pct_ebt = ($ebt_tot_prev != 0) ? ($inc_dec_ebt / abs($ebt_tot_prev)) * 100 : ($ebt_tot_p != 0 ? 100 : 0);
+        $pct_ebt = ($ebt_tot_prev != 0) ? ($inc_dec_ebt / $ebt_tot_prev) * 100 : ($ebt_tot_p != 0 ? 100 : 0);
 
         $final_table_rows[] = ['is_manual_spacer' => true];
 
@@ -770,7 +770,7 @@ foreach ($grouped_rows as $sort_order => $rows) {
         $net_tot_prev = $ebt_tot_prev - $total_previous_total;
 
         $inc_dec_net = $net_tot_p - $net_tot_prev;
-        $pct_net = ($net_tot_prev != 0) ? ($inc_dec_net / abs($net_tot_prev)) * 100 : ($net_tot_p != 0 ? 100 : 0);
+        $pct_net = ($net_tot_prev != 0) ? ($inc_dec_net / $net_tot_prev) * 100 : ($net_tot_p != 0 ? 100 : 0);
 
         $final_table_rows[] = ['is_manual_spacer' => true];
 
@@ -1077,7 +1077,7 @@ if (!empty($selected_regions)) {
                                                     if (isset($row['percentage'])) {
                                                         $percentage = $row['percentage'];
                                                     } else {
-                                                        $percentage = ($previous_total != 0) ? ($inc_dec / abs($previous_total)) * 100 : (($primary_total != 0) ? 100 : 0);
+                                                        $percentage = ($previous_total != 0) ? ($inc_dec / $previous_total) * 100 : (($primary_total != 0) ? 100 : 0);
                                                     }
                                                     
                                                     $inc_dec_class = $inc_dec > 0 ? 'positive' : (($inc_dec < 0) ? 'negative' : '');

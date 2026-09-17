@@ -505,7 +505,7 @@ function compute_table_rows_for_export(
 
         if ((int)$sort_order == 20) {
             $inc_dec_rev = $rev_tot_p - $rev_tot_prev;
-            $pct_rev = ($rev_tot_prev != 0) ? ($inc_dec_rev / abs($rev_tot_prev)) * 100 : ($rev_tot_p != 0 ? 100 : 0);
+            $pct_rev = ($rev_tot_prev != 0) ? ($inc_dec_rev / $rev_tot_prev) * 100 : ($rev_tot_p != 0 ? 100 : 0);
             
             $final_table_rows[] = [
                 'sort_order' => 'TOTAL REVENUES',
@@ -537,7 +537,7 @@ function compute_table_rows_for_export(
             $gp_tot_prev = $rev_tot_prev - $total_previous_total;
             
             $inc_dec_gp = $gp_tot_p - $gp_tot_prev;
-            $pct_gp = ($gp_tot_prev != 0) ? ($inc_dec_gp / abs($gp_tot_prev)) * 100 : ($gp_tot_p != 0 ? 100 : 0);
+            $pct_gp = ($gp_tot_prev != 0) ? ($inc_dec_gp / $gp_tot_prev) * 100 : ($gp_tot_p != 0 ? 100 : 0);
             
             $final_table_rows[] = [
                 'sort_order' => 'GROSS PROFIT',
@@ -562,7 +562,7 @@ function compute_table_rows_for_export(
 
         if ((int)$sort_order == 23) {
             $inc_dec_sa = $sa_tot_p - $sa_tot_prev;
-            $pct_sa = ($sa_tot_prev != 0) ? ($inc_dec_sa / abs($sa_tot_prev)) * 100 : ($sa_tot_p != 0 ? 100 : 0);
+            $pct_sa = ($sa_tot_prev != 0) ? ($inc_dec_sa / $sa_tot_prev) * 100 : ($sa_tot_p != 0 ? 100 : 0);
             
             $final_table_rows[] = [
                 'sort_order' => 'TOTAL SELLING AND ADMIN EXPENSES',
@@ -586,7 +586,7 @@ function compute_table_rows_for_export(
             $ebitda_tot_prev = $gp_tot_prev - $sa_tot_prev;
             
             $inc_dec_ebitda = $ebitda_tot_p - $ebitda_tot_prev;
-            $pct_ebitda = ($ebitda_tot_prev != 0) ? ($inc_dec_ebitda / abs($ebitda_tot_prev)) * 100 : ($ebitda_tot_p != 0 ? 100 : 0);
+            $pct_ebitda = ($ebitda_tot_prev != 0) ? ($inc_dec_ebitda / $ebitda_tot_prev) * 100 : ($ebitda_tot_p != 0 ? 100 : 0);
             
             $final_table_rows[] = [
                 'sort_order' => "EARNINGS BEFORE INTEREST, TAXES, DEP'N, & AMORT",
@@ -613,7 +613,7 @@ function compute_table_rows_for_export(
             $ebit_tot_prev = $ebitda_tot_prev - $total_previous_total;
 
             $inc_dec_ebit = $ebit_tot_p - $ebit_tot_prev;
-            $pct_ebit = ($ebit_tot_prev != 0) ? ($inc_dec_ebit / abs($ebit_tot_prev)) * 100 : ($ebit_tot_p != 0 ? 100 : 0);
+            $pct_ebit = ($ebit_tot_prev != 0) ? ($inc_dec_ebit / $ebit_tot_prev) * 100 : ($ebit_tot_p != 0 ? 100 : 0);
 
             $final_table_rows[] = [
                 'sort_order' => 'EARNINGS BEFORE INTEREST & TAXES',
@@ -640,7 +640,7 @@ function compute_table_rows_for_export(
             $ebt_tot_prev = $ebit_tot_prev - $total_previous_total;
 
             $inc_dec_ebt = $ebt_tot_p - $ebt_tot_prev;
-            $pct_ebt = ($ebt_tot_prev != 0) ? ($inc_dec_ebt / abs($ebt_tot_prev)) * 100 : ($ebt_tot_p != 0 ? 100 : 0);
+            $pct_ebt = ($ebt_tot_prev != 0) ? ($inc_dec_ebt / $ebt_tot_prev) * 100 : ($ebt_tot_p != 0 ? 100 : 0);
 
             $final_table_rows[] = [
                 'sort_order' => 'EARNINGS BEFORE TAXES',
@@ -667,7 +667,7 @@ function compute_table_rows_for_export(
             $net_tot_prev = $ebt_tot_prev - $total_previous_total;
 
             $inc_dec_net = $net_tot_p - $net_tot_prev;
-            $pct_net = ($net_tot_prev != 0) ? ($inc_dec_net / abs($net_tot_prev)) * 100 : ($net_tot_p != 0 ? 100 : 0);
+            $pct_net = ($net_tot_prev != 0) ? ($inc_dec_net / $net_tot_prev) * 100 : ($net_tot_p != 0 ? 100 : 0);
 
             $final_table_rows[] = [
                 'sort_order' => 'TOTAL NET INCOME/LOSS',
@@ -961,7 +961,7 @@ foreach ($export_combinations as $index => $combo) {
                 $current_row++;
             } elseif (isset($row['is_summary_row']) && $row['is_summary_row']) {
                 $inc_dec = $row['inc_dec'] ?? ($row['primary_total'] - $row['previous_total']);
-                $pct = $row['percentage'] ?? (($row['previous_total'] != 0) ? ($inc_dec / abs($row['previous_total'])) * 100 : (($row['primary_total'] != 0) ? 100 : 0));
+                $pct = $row['percentage'] ?? (($row['previous_total'] != 0) ? ($inc_dec / $row['previous_total']) * 100 : (($row['primary_total'] != 0) ? 100 : 0));
 
                 $label = $row['sort_order'];
 
@@ -1034,8 +1034,29 @@ foreach ($export_combinations as $index => $combo) {
 
                 applyBorderStyles($sheet, $current_row, (string)$label, $startColumnIndex);
 
+                // Red font for all negative amounts
+                if (($row['primary_mlfsi'] ?? 0) < 0) {
+                    $sheet->getStyle(cellAddr($startColumnIndex, 4, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
+                }
+                if (($row['primary_jewelers'] ?? 0) < 0) {
+                    $sheet->getStyle(cellAddr($startColumnIndex, 5, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
+                }
+                if (($row['primary_total'] ?? 0) < 0) {
+                    $sheet->getStyle(cellAddr($startColumnIndex, 6, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
+                }
+                if (($row['previous_mlfsi'] ?? 0) < 0) {
+                    $sheet->getStyle(cellAddr($startColumnIndex, 8, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
+                }
+                if (($row['previous_jewelers'] ?? 0) < 0) {
+                    $sheet->getStyle(cellAddr($startColumnIndex, 9, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
+                }
+                if (($row['previous_total'] ?? 0) < 0) {
+                    $sheet->getStyle(cellAddr($startColumnIndex, 10, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
+                }
                 if ($inc_dec < 0) {
                     $sheet->getStyle(cellAddr($startColumnIndex, 12, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
+                }
+                if ($pct < 0) {
                     $sheet->getStyle(cellAddr($startColumnIndex, 13, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
                 }
 
@@ -1068,7 +1089,7 @@ foreach ($export_combinations as $index => $combo) {
                 $sheet->setCellValue(cellAddr($startColumnIndex, 10, $current_row), $row['previous_total']);
 
                 $inc_dec = $row['primary_total'] - $row['previous_total'];
-                $pct = ($row['previous_total'] != 0) ? ($inc_dec / abs($row['previous_total'])) * 100 : (($row['primary_total'] != 0) ? 100 : 0);
+                $pct = ($row['previous_total'] != 0) ? ($inc_dec / $row['previous_total']) * 100 : (($row['primary_total'] != 0) ? 100 : 0);
 
                 $sheet->setCellValue(cellAddr($startColumnIndex, 12, $current_row), $inc_dec);
                 if ($pct >= 1000 || $pct <= -1000) {
@@ -1087,8 +1108,29 @@ foreach ($export_combinations as $index => $combo) {
                     $sheet->getRowDimension($current_row)->setOutlineLevel(1)->setVisible(false);
                 }
 
+                // Red font for all negative amounts
+                if (($row['primary_mlfsi'] ?? 0) < 0) {
+                    $sheet->getStyle(cellAddr($startColumnIndex, 4, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
+                }
+                if (($row['primary_jewelers'] ?? 0) < 0) {
+                    $sheet->getStyle(cellAddr($startColumnIndex, 5, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
+                }
+                if (($row['primary_total'] ?? 0) < 0) {
+                    $sheet->getStyle(cellAddr($startColumnIndex, 6, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
+                }
+                if (($row['previous_mlfsi'] ?? 0) < 0) {
+                    $sheet->getStyle(cellAddr($startColumnIndex, 8, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
+                }
+                if (($row['previous_jewelers'] ?? 0) < 0) {
+                    $sheet->getStyle(cellAddr($startColumnIndex, 9, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
+                }
+                if (($row['previous_total'] ?? 0) < 0) {
+                    $sheet->getStyle(cellAddr($startColumnIndex, 10, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
+                }
                 if ($inc_dec < 0) {
                     $sheet->getStyle(cellAddr($startColumnIndex, 12, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
+                }
+                if ($pct < 0) {
                     $sheet->getStyle(cellAddr($startColumnIndex, 13, $current_row))->getFont()->getColor()->setARGB('FFFF0000');
                 }
                 $current_row++;

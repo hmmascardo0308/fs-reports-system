@@ -78,21 +78,65 @@ function getSortOrderRanges(string $gl_code_mode): array {
 
 // HARDCODED GL MAPPING FOR OLD GL CODES
 $old_gl_mapping = [
-    'COS-2' => 'COS-5', 'COS-3' => 'COS-6', 'COS-4' => 'COS-7',
+    'COS-2' => 'COS-5', 
+    'COS-3' => 'COS-6', 
+    'COS-4' => 'COS-7',
+
     'MLE-2' => 'MLE-3',
-    'TAE-15' => 'TAE-16', 'TAE-16' => 'TAE-17', 'TAE-17' => 'TAE-18', 'TAE-18' => 'TAE-19',
-    'TAE-19' => 'TAE-20', 'TAE-20' => 'TAE-21', 'TAE-21' => 'TAE-22', 'TAE-22' => 'TAE-23', 'TAE-23' => null,
-    'TOI-18' => null, 'TOI-19' => 'TOI-18', 'TOI-20' => 'MLE-2', 'TOI-22' => 'INJ-5', 'TOI-23' => 'INJ-4', 'TOI-24' => null,
-    'VEH-5' => 'VEH-6', 'VEH-6' => 'VEH-7', 'VEH-7' => 'VEH-8', 'VEH-8' => 'VEH-9', 'VEH-9' => 'VEH-10',
+
+    'TAE-15' => 'TAE-16', 
+    'TAE-16' => 'TAE-17', 
+    'TAE-17' => 'TAE-18', 
+    'TAE-18' => 'TAE-19',
+    'TAE-19' => 'TAE-20', 
+    'TAE-20' => 'TAE-21', 
+    'TAE-21' => 'TAE-22', 
+    'TAE-22' => 'TAE-23', 
+    'TAE-23' => null,
+
+    'TOI-18' => null, 
+    'TOI-19' => 'TOI-18', 
+    'TOI-20' => 'MLE-2', 
+    'TOI-22' => 'INJ-5', 
+    'TOI-23' => 'INJ-4', 
+    'TOI-24' => null,
+
+    'VEH-5' => 'VEH-6', 
+    'VEH-6' => 'VEH-7', 
+    'VEH-7' => 'VEH-8', 
+    'VEH-8' => 'VEH-9', 
+    'VEH-9' => 'VEH-10',
 ];
 
 // HARDCODED GL MAPPING FOR NEW GL CODES
 $new_gl_mapping = [
-    'COS-2' => 'COS-5', 'COS-3' => 'COS-6', 'COS-4' => 'COS-7',
-    'TAE-15' => 'TAE-16', 'TAE-16' => 'TAE-17', 'TAE-17' => 'TAE-18', 'TAE-18' => 'TAE-19',
-    'TAE-19' => 'TAE-20', 'TAE-20' => 'TAE-21', 'TAE-21' => 'TAE-22', 'TAE-22' => 'TAE-23', 'TAE-23' => null,
-    'TOI-18' => null, 'TOI-19' => 'TOI-18', 'TOI-20' => 'COS-8', 'TOI-22' => null, 'TOI-23' => null, 'TOI-24' => null,
-    'VEH-5' => 'VEH-7', 'VEH-6' => 'VEH-8', 'VEH-7' => 'VEH-9', 'VEH-8' => 'VEH-10', 'VEH-9' => 'VEH-11',
+    'COS-2' => 'COS-5', 
+    'COS-3' => 'COS-6', 
+    'COS-4' => 'COS-7',
+
+    'TAE-15' => 'TAE-16', 
+    'TAE-16' => 'TAE-17', 
+    'TAE-17' => 'TAE-18', 
+    'TAE-18' => 'TAE-19',
+    'TAE-19' => 'TAE-20', 
+    'TAE-20' => 'TAE-21', 
+    'TAE-21' => 'TAE-22', 
+    'TAE-22' => 'TAE-23', 
+    'TAE-23' => null,
+
+    'TOI-18' => null, 
+    'TOI-19' => 'TOI-18', 
+    'TOI-20' => 'COS-8', 
+    'TOI-22' => null, 
+    'TOI-23' => null, 
+    'TOI-24' => null,
+
+    'VEH-5' => 'VEH-7', 
+    'VEH-6' => 'VEH-8', 
+    'VEH-7' => 'VEH-9', 
+    'VEH-8' => 'VEH-10', 
+    'VEH-9' => 'VEH-11',
+
     'INS-1' => ['INS-28','INS-29','INS-30','INS-31','INS-34','INS-39'],
     'INS-2' => ['INS-25','INS-26','INS-44','INS-47'],
     'INS-3' => ['INS-32','INS-33','INS-42','INS-43','INS-45'],
@@ -170,13 +214,29 @@ if ($gl_code_mode === 'mixed') {
         'INS-5' => ['INS-20','INS-21','INS-22','INS-23','INS-24','INS-37','INS-41'],
         'INS-6' => ['INS-1','INS-2','INS-3','INS-4','INS-5','INS-6','INS-7','INS-8','INS-9','INS-10','INS-11','INS-12','INS-13','INS-14','INS-35','INS-36','INS-40'],
         'INS-7' => ['INS-15','INS-16','INS-17','INS-18','INS-19'],
-        'INS-8' => ['INS-38'], 'INS-9' => ['INS-48'], 'INS-10' => ['INS-49'],
-        'INS-11' => [], 'INS-12' => [],
-        'COS-5' => ['COS-2'], 'COS-6' => ['COS-3'], 'COS-7' => ['COS-4'],
-        'COS-2' => [], 'COS-3' => [], 'COS-4' => [], 'COS-8' => [], 'COS-9' => [],
-        'VEH-5' => [''], 'VEH-6' => [''],
-        'VEH-7' => ['VEH-5'], 'VEH-8' => ['VEH-6'], 'VEH-9' => ['VEH-7'], 'VEH-10' => ['VEH-8'], 'VEH-11' => ['VEH-9'],
-        'TOI-33' => ['TOI-31'], 'TOI-34' => ['TOI-32'], 'TAE-23' => ['']
+        'INS-8' => ['INS-38'], 
+        'INS-9' => ['INS-48'], 
+        'INS-10' => ['INS-49'],
+        'INS-11' => [], 
+        'INS-12' => [],
+        'COS-5' => ['COS-2'], 
+        'COS-6' => ['COS-3'], 
+        'COS-7' => ['COS-4'],
+        'COS-2' => [], 
+        'COS-3' => [], 
+        'COS-4' => [], 
+        'COS-8' => [], 
+        'COS-9' => [],
+        'VEH-5' => [''], 
+        'VEH-6' => [''],
+        'VEH-7' => ['VEH-5'], 
+        'VEH-8' => ['VEH-6'], 
+        'VEH-9' => ['VEH-7'], 
+        'VEH-10' => ['VEH-8'], 
+        'VEH-11' => ['VEH-9'],
+        'TOI-33' => ['TOI-31'], 
+        'TOI-34' => ['TOI-32'], 
+        'TAE-23' => ['']
     ];
 }
 

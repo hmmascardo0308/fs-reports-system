@@ -364,6 +364,15 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                                 </a>
                             </li>
                         <?php endif; ?>
+            
+                        <?php if ($user_type === "admin") : ?>
+                        <li>
+                                <a href="gl_mapping.php">
+                                    <i class="fa-solid fa-link"></i> GL Mapping
+                                </a>
+                            </li>
+                        <?php endif; ?>
+
                     </ul>
                 </li>
             <?php endif; ?>

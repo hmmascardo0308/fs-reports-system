@@ -1,5 +1,8 @@
 <?php
+
+// welcome.php
 session_start();
+
 if (isset($_SESSION['username']) && !empty($_SESSION['username'])) {
     header("Location: user/user_dashboard.php");
     exit;
@@ -11,207 +14,139 @@ if (isset($_SESSION['username']) && !empty($_SESSION['username'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>FS Consolidator System</title>
+
     <link rel="stylesheet" href="login.css?v=<?= time(); ?>">
-    <link rel="icon" href="images/MLW%20Logo.png" type="image/png"/>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <style> 
-    
-    /* ────────────────────────────────────────────────
-   Landing Page Specific Styles
-───────────────────────────────────────────────── */
+    <link rel="icon" href="images/MLW%20Logo.png" type="image/png">
+    <link rel="stylesheet" href="welcome.css?v=<?= time(); ?>">
 
-.landing-container {
-    width: 100%;
-    min-height: 95vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #ea6666 0%, #a24b4b 100%);
-    padding: 30px 20px;
-}
 
-.hero-card {
-    background: white;
-    border-radius: 24px;
-    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
-    padding: 50px 40px;
-    max-width: 580px;
-    width: 100%;
-    text-align: center;
-}
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 
-.hero-card h1 {
-    font-size: 2.1rem;
-    color: #222;
-    margin: 20px 0 12px;
-    font-weight: 700;
-}
 
-.hero-subtitle {
-    color: #555;
-    font-size: 1.05rem;
-    line-height: 1.6;
-    margin-bottom: 40px;
-}
-
-.big-login-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    background: #fe0000ff;
-    color: white;
-    font-size: 1.25rem;
-    font-weight: 600;
-    padding: 18px 48px;
-    border-radius: 12px;
-    text-decoration: none;
-    transition: all 0.3s ease;
-    box-shadow: 0 8px 25px rgba(254, 0, 0, 0.25);
-    margin: 20px 0 30px;
-}
-
-.big-login-btn:hover {
-    background: #d32f2f;
-    transform: translateY(-4px);
-    box-shadow: 0 14px 35px rgba(254, 0, 0, 0.35);
-}
-
-.big-login-btn:active {
-    transform: translateY(-1px);
-}
-
-.secondary-text {
-    color: #666;
-    font-size: 0.95rem;
-    margin: 10px 0 40px;
-}
-
-.secondary-text i {
-    color: #fe0000ff;
-    margin-right: 8px;
-}
-
-.features {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 28px;
-    margin-bottom: 40px;
-}
-
-.feature-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    color: #444;
-    font-size: 0.95rem;
-    font-weight: 500;
-}
-
-.feature-item i {
-    font-size: 2.1rem;
-    color: #fe0000ff;
-    opacity: 0.9;
-}
-
-.landing-footer {
-    margin-top: 30px;
-    padding-top: 25px;
-    border-top: 1px solid #eee;
-    color: #777;
-    font-size: 0.9rem;
-}
-
-.contact-hint {
-    margin-top: 10px;
-    color: #555;
-}
-
-.contact-hint strong {
-    color: #fe0000ff;
-}
-
-/* Responsive adjustments */
-@media (max-width: 480px) {
-    .hero-card {
-        padding: 40px 25px;
-    }
-    .big-login-btn {
-        padding: 16px 36px;
-        font-size: 1.1rem;
-    }
-    h1 {
-        font-size: 1.8rem;
-    }
-}
-
-</style>
 </head>
+
 <body>
-    <div class="landing-container">
-        <div class="hero-card">
-            <div class="logo-container">
-                <img src="images/MLW%20Logo.png" alt="QCL Logo" class="logo">
-            </div>
 
-            <h1>Financial Statement Consolidator System</h1>
-            <p class="hero-subtitle">
-                Manage, analyze, and generate comparative reports with ease.<br>
-                Secure access for authorized users only.
-            </p>
+    <main class="landing-container">
 
-            <div class="action-area">
+        <!-- Decorative background -->
+        <div class="background-shape shape-one"></div>
+        <div class="background-shape shape-two"></div>
+        <div class="background-shape shape-three"></div>
+
+        <section class="hero-card">
+
+            <!-- LEFT CONTENT -->
+            <div class="hero-content">
+
+                <div class="brand">
+                    <img
+                        src="images/MLW%20Logo.png"
+                        alt="MLFSI Logo"
+                        class="brand-logo"
+                    >
+
+                    <div class="brand-name">
+                        M Lhuillier Financial Services Inc.<br>
+                        Financial Systems
+                    </div>
+                </div>
+
+                <div class="eyebrow">
+                    <i class="fas fa-chart-line"></i>
+                    Financial Report Platform
+                </div>
+
+                <h1>
+                    Financial Statement
+                    <span>Consolidator</span>
+                </h1>
+
+                <p class="hero-subtitle">
+                    A centralized platform for consolidating financial
+                    statement data, preparing comparative reports, and
+                    generating management reports.
+                </p>
+
                 <a href="login.php" class="big-login-btn">
-                    <i class="fas fa-sign-in-alt"></i>
-                    <span>Login to Your Account</span>
+                    <i class="fas fa-arrow-right"></i>
+                    <span>Sign in to the System</span>
                 </a>
 
                 <p class="secondary-text">
-                    <i class="fas fa-shield-alt"></i>
-                    Secured system • Admin-managed access
+                    <i class="fas fa-lock"></i>
+                    Authorized users only
                 </p>
+
+                <div class="features">
+
+                    <div class="feature-item">
+                        <i class="fas fa-chart-column"></i>
+                        <span>Comparative Reports</span>
+                    </div>
+
+                    <div class="feature-item">
+                        <i class="fas fa-file-excel"></i>
+                        <span>Report Export</span>
+                    </div>
+
+                    <div class="feature-item">
+                        <i class="fas fa-user-shield"></i>
+                        <span>Access Control</span>
+                    </div>
+
+                </div>
+
             </div>
 
-            <div class="features">
-                <div class="feature-item">
-                    <i class="fas fa-chart-bar"></i>
-                    <span>Comparative Analytics</span>
-                </div>
-                <div class="feature-item">
-                    <i class="fas fa-file-export"></i>
-                    <span>Export Reports</span>
-                </div>
-                <div class="feature-item">
-                    <i class="fas fa-users-cog"></i>
-                    <span>Role-based Access</span>
-                </div>
-            </div>
+            <!-- RIGHT PANEL -->
+            <aside class="hero-panel">
 
-            <footer class="landing-footer">
-                <p>© <?= date("Y") ?> Comparative Report System • All rights reserved • MLFSI</p>
-                <p class="contact-hint">
-                    Need an account? <strong>Contact your system administrator</strong>
-                </p>
-            </footer>
-        </div>
-    </div>
+                <div class="panel-content">
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const elements = document.querySelectorAll('.logo, h1, .hero-subtitle, .big-login-btn, .features');
-            elements.forEach((el, index) => {
-                el.style.opacity = '0';
-                el.style.transform = 'translateY(30px)';
-                setTimeout(() => {
-                    el.style.transition = 'all 0.7s ease-out';
-                    el.style.opacity = '1';
-                    el.style.transform = 'translateY(0)';
-                }, 150 * index);
-            });
-        });
-    </script>
+                    <div class="panel-icon">
+                        <i class="fa-regular fa-building"></i>
+                    </div>
+
+                    <h2>
+                        Centralized Financial Reporting
+                    </h2>
+
+                    <p>
+                        Upload, consolidate financial information and
+                        generate standardized comparative reports
+                        through one system.
+                    </p>
+
+                    <div class="security-box">
+                        <i class="fas fa-shield-halved"></i>
+
+                        <span>
+                            Your account access is managed by the
+                            system administrator.
+                        </span>
+                    </div>
+
+                </div>
+
+            </aside>
+
+        </section>
+
+        <footer class="landing-footer">
+            <p>
+                © <?= date("Y") ?> Financial Statement Consolidator System
+                · MLFSI
+            </p>
+            <p>
+                All rights reserved.
+            </p>
+        </footer>
+
+    </main>
+
 </body>
 </html>
