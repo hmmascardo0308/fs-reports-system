@@ -1,5 +1,5 @@
 <?php
-// comparative_report_original_ho_with_past_and_adjustment.php
+// comparative_report_original_ho_with_past_and_adjustment.php page 5
 session_start();
 require_once __DIR__ . '/../config/config.php';
 
@@ -204,8 +204,8 @@ $new_gl_mapping = [
     'INS-5'  => ['INS-20', 'INS-21', 'INS-22', 'INS-23', 'INS-24', 'INS-37', 'INS-41'],
     'INS-6'  => ['INS-1', 'INS-2', 'INS-3', 'INS-4', 'INS-5', 'INS-6', 'INS-7', 'INS-8', 'INS-9', 'INS-10', 'INS-11', 'INS-12', 'INS-13', 'INS-14', 'INS-35', 'INS-36', 'INS-40'],
     'INS-7'  => ['INS-15', 'INS-16', 'INS-17', 'INS-18', 'INS-19'],
-    'INS-10'  => ['INS-38'],
-    'INS-11'  => ['INS-48'],
+    'INS-10' => ['INS-38'],
+    'INS-11' => ['INS-48'],
     'INS-12' => ['INS-49'],
     'INS-13' => [],
     'INS-14' => [],

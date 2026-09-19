@@ -51,7 +51,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register_user'])) {
         $message = "All required fields must be filled.";
         $message_type = "error";
     } else {
-        $check_username = $conn->prepare("SELECT id FROM qcl_user WHERE username = ?");
+        $check_username = $conn->prepare("SELECT id FROM fs_user WHERE username = ?");
         $check_username->bind_param("s", $username_reg);
         $check_username->execute();
         $check_username->store_result();
@@ -61,7 +61,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register_user'])) {
             $message_type = "error";
         } else {
             $hashed_password = password_hash($password_reg, PASSWORD_DEFAULT);
-            $insert_sql = "INSERT INTO qcl_user (id_number, first_name, middle_name, last_name, full_name, username, password, user_type, created_at, last_online) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+            $insert_sql = "INSERT INTO fs_user (id_number, first_name, middle_name, last_name, full_name, username, password, user_type, created_at, last_online) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
             $insert_stmt = $conn->prepare($insert_sql);
             $insert_stmt->bind_param("ssssssss", $id_number, $first_name, $middle_name, $last_name, $full_name_reg, $username_reg, $hashed_password, $user_type_reg);
 
@@ -91,7 +91,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_user'])) {
         $message_type = "error";
     } else {
         // Check if username is taken by someone else
-        $check = $conn->prepare("SELECT id FROM qcl_user WHERE username = ? AND id != ?");
+        $check = $conn->prepare("SELECT id FROM fs_user WHERE username = ? AND id != ?");
         $check->bind_param("si", $username, $user_id);
         $check->execute();
         $check->store_result();
@@ -100,7 +100,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_user'])) {
             $message = "Username is already taken by another user.";
             $message_type = "error";
         } else {
-            $update_sql = "UPDATE qcl_user SET 
+            $update_sql = "UPDATE fs_user SET 
                 id_number   = ?,
                 first_name  = ?,
                 middle_name = ?,
@@ -129,7 +129,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_user'])) {
     $user_id = $_POST['user_id'] ?? '';
     $current_username = $_SESSION['username'] ?? '';
     
-    $check_self = $conn->prepare("SELECT username FROM qcl_user WHERE id = ?");
+    $check_self = $conn->prepare("SELECT username FROM fs_user WHERE id = ?");
     $check_self->bind_param("i", $user_id);
     $check_self->execute();
     $result_self = $check_self->get_result();
@@ -139,7 +139,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_user'])) {
             $message = "You cannot delete your own account.";
             $message_type = "error";
         } else {
-            $delete_stmt = $conn->prepare("DELETE FROM qcl_user WHERE id = ?");
+            $delete_stmt = $conn->prepare("DELETE FROM fs_user WHERE id = ?");
             $delete_stmt->bind_param("i", $user_id);
             if ($delete_stmt->execute()) {
                 header("Location: " . $_SERVER['PHP_SELF'] . "?delete_success=1");
@@ -152,7 +152,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_user'])) {
     }
 }
 
-$sql = "SELECT * FROM qcl_user ORDER BY id ASC";
+$sql = "SELECT * FROM fs_user ORDER BY id ASC";
 $result = $conn->query($sql);
 ?>
 

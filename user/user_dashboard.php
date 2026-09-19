@@ -33,7 +33,7 @@ $db_password = null; // Initialize to prevent "Undefined variable" notice
 if (!empty($username)) {
     $stmt = $conn->prepare("
         SELECT last_online, password 
-        FROM qcl_user 
+        FROM fs_user 
         WHERE username = ? 
         LIMIT 1
     ");
@@ -61,7 +61,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['change_password'])) {
     $stored_password = null; // Initialize to prevent "Undefined variable" notice
     
     // Verify current password
-    $stmt = $conn->prepare("SELECT password FROM qcl_user WHERE id = ?");
+    $stmt = $conn->prepare("SELECT password FROM fs_user WHERE id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $stmt->bind_result($stored_password);
@@ -90,7 +90,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['change_password'])) {
     } else {
         // Update password
         $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
-        $update = $conn->prepare("UPDATE qcl_user SET password = ? WHERE id = ?");
+        $update = $conn->prepare("UPDATE fs_user SET password = ? WHERE id = ?");
         $update->bind_param("si", $hashed_password, $user_id);
         
         if ($update->execute()) {

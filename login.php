@@ -29,7 +29,7 @@ if (isset($_POST['login'])) {
         $full_name = null;
         $user_type = null;
         $db_password = null;
-        $stmt = $conn->prepare("SELECT id, id_number, full_name, user_type, password FROM fs_reports.qcl_user WHERE username = ?");
+        $stmt = $conn->prepare("SELECT id, id_number, full_name, user_type, password FROM fs_reports.fs_user WHERE username = ?");
         $stmt->bind_param("s", $username);
         $stmt->execute();
         $stmt->store_result();
@@ -52,7 +52,7 @@ if (isset($_POST['login'])) {
 
                 date_default_timezone_set('Asia/Manila');
                 $now = date('Y-m-d H:i:s');
-                $update = $conn->prepare("UPDATE fs_reports.qcl_user SET last_online = ? WHERE id = ?");
+                $update = $conn->prepare("UPDATE fs_reports.fs_user SET last_online = ? WHERE id = ?");
                 $update->bind_param("si", $now, $id);
                 $update->execute();
                 $update->close();
@@ -87,8 +87,8 @@ if (isset($_POST['reset_password'])) {
         $reset_errors[] = "Username is required.";
         $show_modal = true; // Keep modal open
     } else {
-        // Check if username exists in qcl_user table
-        $check_stmt = $conn->prepare("SELECT user_type FROM fs_reports.qcl_user WHERE username = ?");
+        // Check if username exists in fs_user table
+        $check_stmt = $conn->prepare("SELECT user_type FROM fs_reports.fs_user WHERE username = ?");
         $check_stmt->bind_param("s", $reset_username);
         $check_stmt->execute();
         $check_stmt->store_result();
