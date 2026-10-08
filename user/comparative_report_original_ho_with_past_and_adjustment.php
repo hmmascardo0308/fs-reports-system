@@ -296,8 +296,27 @@ if (
 
         } elseif ($gl_code_mode === 'mixed') {
 
-            // Mixed mode allows periods from both sides of the cutoff.
-            // No additional validation needed for Primary and Previous.
+            // Mixed mode is only allowed when the Primary and Previous
+            // periods straddle the old/new GL cutoff (one is March 2026
+            // or earlier, the other is April 2026 or later).
+            $primary_is_old   = isMarch2026OrEarlier($primary_period);
+            $primary_is_new   = isApril2026OrLater($primary_period);
+            $previous_is_old  = isMarch2026OrEarlier($previous_period);
+            $previous_is_new  = isApril2026OrLater($previous_period);
+
+            $straddles_cutoff = (
+                ($primary_is_old && $previous_is_new) ||
+                ($primary_is_new && $previous_is_old)
+            );
+
+            if (!$straddles_cutoff) {
+
+                $error_message =
+                    'Mix GL Code is only available when the Primary and Previous periods overlap the old/new GL cutoff. ' .
+                    'One period must be March 2026 or earlier and the other must be April 2026 or later.';
+
+                $show_error = true;
+            }
         }
     }
 
@@ -396,49 +415,249 @@ if ($gl_code_mode === 'mixed') {
     }
 
     // New GL ID => old GL IDs (for historical / pre-new-GL source data)
-    $mixed_id_map = [
+   $mixed_id_map = [
+    // ============================================================
+    // MON - Monetary (1:1)
+    // ============================================================
+    'MON-1' => ['MON-1'],
+    'MON-2' => ['MON-2'],
+    'MON-3' => ['MON-3'],
+    'MON-4' => ['MON-4'],
+    'MON-5' => ['MON-5'],
+    'MON-6' => ['MON-6'],
+    'MON-7' => ['MON-7'],
 
-        // INS (Insurance) – same aggregation as new_gl_mapping
-        'INS-1'  => ['INS-28', 'INS-29', 'INS-30', 'INS-31', 'INS-34', 'INS-39'],
-        'INS-2'  => ['INS-25', 'INS-26', 'INS-44', 'INS-47'],
-        'INS-3'  => ['INS-32', 'INS-33', 'INS-42', 'INS-43', 'INS-45'],
-        'INS-4'  => ['INS-27', 'INS-46'],
-        'INS-5'  => ['INS-20', 'INS-21', 'INS-22', 'INS-23', 'INS-24', 'INS-37', 'INS-41'],
-        'INS-6'  => ['INS-1', 'INS-2', 'INS-3', 'INS-4', 'INS-5', 'INS-6', 'INS-7', 'INS-8', 'INS-9', 'INS-10', 'INS-11', 'INS-12', 'INS-13', 'INS-14', 'INS-35', 'INS-36', 'INS-40'],
-        'INS-7'  => ['INS-15', 'INS-16', 'INS-17', 'INS-18', 'INS-19'],
-        'INS-10'  => ['INS-38'],
-        'INS-11'  => ['INS-48'],
-        'INS-12' => ['INS-49'],
-        'INS-13' => [],  // new-only
-        'INS-14' => [],  // new-only
+    // ============================================================
+    // VEH - Vehicle (SHIFTED mapping)
+    // ============================================================
+    'VEH-1' => ['VEH-1'],
+    'VEH-2' => ['VEH-2'],
+    'VEH-3' => ['VEH-3'],
+    'VEH-4' => ['VEH-4'],
+    'VEH-5' => [],           // new-only (Truck Loan - H.O)
+    'VEH-6' => [],           // new-only (Yadea Sales - H.O)
+    'VEH-7' => ['VEH-5'],    // Application Fee ← old VEH-5
+    'VEH-8' => ['VEH-6'],    // Appraisal Fee ← old VEH-6
+    'VEH-9' => ['VEH-7'],    // Penalty & Other ← old VEH-7
+    'VEH-10' => ['VEH-8'],   // Chattel Mortgage ← old VEH-8
+    'VEH-11' => ['VEH-9'],   // Notarial Income ← old VEH-9
 
-        // COS (Cost of Sales) – old source IDs map into new targets
-        // COS-2/3/4 in the NEW structure are different accounts (ML Shop, etc.)
-        // and must not keep the old Special Products / Tele / Kargo amounts.
-        'COS-5' => ['COS-2'],  // Special Products
-        'COS-6' => ['COS-3'],  // Telecommunication
-        'COS-7' => ['COS-4'],  // ML Kargo
-        'COS-2' => [],         // ML Shop - Jewelry (new-only)
-        'COS-3' => [],         // Online Live Selling (new-only)
-        'COS-4' => [],         // Jewelry - Cost of Sales (new-only)
-        'COS-8' => [],
-        'COS-9' => [],
+    // ============================================================
+    // HOM - Home Loan (1:1)
+    // ============================================================
+    'HOM-1' => ['HOM-1'],
+    'HOM-2' => ['HOM-2'],
+    'HOM-3' => ['HOM-3'],
+    'HOM-4' => ['HOM-4'],
+    'HOM-5' => ['HOM-5'],
+    'HOM-6' => ['HOM-6'],
 
-        // VEHICLE GL MAPPING
-        'VEH-5'  => [''],
-        'VEH-6'  => [''],          // Yadea – no historical source
-        'VEH-7'  => ['VEH-5'],     // Application Fee
-        'VEH-8'  => ['VEH-6'],     // Appraisal Fee
-        'VEH-9'  => ['VEH-7'],     // Penalty & Other
-        'VEH-10' => ['VEH-8'],     // Chattel Mortgage
-        'VEH-11' => ['VEH-9'],     // Notarial Income
+    // ============================================================
+    // COM - Commercial (1:1)
+    // ============================================================
+    'COM-1' => ['COM-1'],
+    'COM-2' => ['COM-2'],
+    'COM-3' => ['COM-3'],
+    'COM-4' => ['COM-4'],
+    'COM-5' => ['COM-5'],
 
-        // TOTAL OTHER INCOME
-        'TOI-33' => ['TOI-31'],
-        'TOI-34' => ['TOI-32'],
+    // ============================================================
+    // SAL, AUT, YAD - new-only (no old equivalent)
+    // ============================================================
+    'SAL-1' => [],
+    'SAL-2' => [],
+    'AUT-1' => [],
+    'YAD-1' => [],
 
-        'TAE-23' => [''],
-    ];
+    // ============================================================
+    // KWA - Kwarta Padala (1:1)
+    // ============================================================
+    'KWA-1' => ['KWA-1'],
+    'KWA-2' => ['KWA-2'],
+    'KWA-3' => ['KWA-3'],
+    'KWA-4' => ['KWA-4'],
+    'KWA-5' => ['KWA-5'],
+    'KWA-6' => ['KWA-6'],
+
+    // ============================================================
+    // PAY - Payment Solution
+    // ============================================================
+    'PAY-1' => ['PAY-1'],
+    'PAY-2' => [],           // new-only (Business Pro - H.O)
+
+    // ============================================================
+    // DOM - Domestic (1:1)
+    // ============================================================
+    'DOM-1' => ['DOM-1'],
+    'DOM-2' => ['DOM-2'],
+    'DOM-3' => ['DOM-3'],
+    'DOM-4' => ['DOM-4'],
+    'DOM-5' => ['DOM-5'],
+    'DOM-6' => ['DOM-6'],
+    'DOM-7' => ['DOM-7'],
+    'DOM-8' => ['DOM-8'],
+
+    // ============================================================
+    // POS, MCA, EPA, COR, BIL (1:1)
+    // ============================================================
+    'POS-1' => ['POS-1'],
+    'MCA-1' => ['MCA-1'],
+    'MCA-2' => ['MCA-2'],
+    'EPA-1' => ['EPA-1'],
+    'COR-1' => ['COR-1'],
+    'COR-2' => ['COR-2'],
+    'BIL-1' => ['BIL-1'],
+    'BIL-2' => ['BIL-2'],
+
+    // ============================================================
+    // MLE - ML Express (SHIFTED)
+    // ============================================================
+    'MLE-1' => ['MLE-1'],
+    'MLE-2' => ['TOI-20'],   // ← old TOI-20 (Income from Water Sold)
+    'MLE-3' => ['MLE-2'],    // ← old MLE-2 (Franchise Fee)
+
+    // ============================================================
+    // INS - Insurance (AGGREGATED)
+    // ============================================================
+    'INS-1' => ['INS-28', 'INS-29', 'INS-30', 'INS-31', 'INS-34', 'INS-39'],
+    'INS-2' => ['INS-25', 'INS-26', 'INS-44', 'INS-47'],
+    'INS-3' => ['INS-32', 'INS-33', 'INS-42', 'INS-43', 'INS-45'],
+    'INS-4' => ['INS-27', 'INS-46'],
+    'INS-5' => ['INS-20', 'INS-21', 'INS-22', 'INS-23', 'INS-24', 'INS-37', 'INS-41'],
+    'INS-6' => ['INS-1', 'INS-2', 'INS-3', 'INS-4', 'INS-5', 'INS-6', 'INS-7',
+                'INS-8', 'INS-9', 'INS-10', 'INS-11', 'INS-12', 'INS-13', 'INS-14',
+                'INS-35', 'INS-36', 'INS-40'],
+    'INS-7' => ['INS-15', 'INS-16', 'INS-17', 'INS-18', 'INS-19'],
+    'INS-8' => [],           // new-only (FPG)
+    'INS-9' => [],           // new-only (PhilBrit)
+    'INS-10' => ['INS-38'],
+    'INS-11' => ['INS-48'],
+    'INS-12' => ['INS-49'],
+    'INS-13' => [],          // new-only (MAA Insurance Commission - H.O)
+    'INS-14' => [],          // new-only (ISPD Income - H.O)
+
+    // ============================================================
+    // INJ - Jewelry (1:1 for INJ-1, INJ-2)
+    // ============================================================
+    'INJ-1' => ['INJ-1'],
+    'INJ-2' => ['INJ-2'],
+    'INJ-3' => [],           // calculated (not sourced)
+    'INJ-4' => [],           // new-only
+    'INJ-5' => [],           // new-only
+    'INJ-6' => [],           // new-only
+
+    // ============================================================
+    // INP, INT, INO, INK (1:1)
+    // ============================================================
+    'INP-1' => ['INP-1'],
+    'INP-2' => ['INP-2'],
+    'INT-1' => ['INT-1'],
+    'INT-2' => ['INT-2'],
+    'INO-1' => ['INO-1'],
+    'INO-2' => ['INO-2'],
+    'INO-3' => ['INO-3'],
+    'INK-1' => ['INK-1'],
+    'INK-2' => ['INK-2'],
+
+    // ============================================================
+    // TOI - Total Other Income
+    // ============================================================
+    'TOI-1' => ['TOI-1'],
+    'TOI-2' => ['TOI-2'],
+    'TOI-3' => ['TOI-3'],
+    'TOI-4' => ['TOI-4'],
+    'TOI-5' => ['TOI-5'],
+    'TOI-6' => ['TOI-6'],
+    'TOI-7' => ['TOI-7'],
+    'TOI-8' => ['TOI-8'],
+    'TOI-9' => ['TOI-9'],
+    'TOI-10' => ['TOI-10'],
+    'TOI-11' => ['TOI-11'],
+    'TOI-12' => ['TOI-12'],
+    'TOI-13' => ['TOI-13'],
+    'TOI-14' => ['TOI-14'],
+    'TOI-15' => ['TOI-15'],
+    'TOI-16' => ['TOI-16'],
+    'TOI-17' => ['TOI-17'],
+    'TOI-18' => ['TOI-19'],  // ← old TOI-19
+    'TOI-19' => [],          // new-only
+    'TOI-20' => [],          // new-only
+    'TOI-21' => ['TOI-21'],
+    'TOI-22' => ['TOI-22'],
+    'TOI-23' => ['TOI-23'],
+    'TOI-24' => ['TOI-24'],
+    'TOI-25' => [],          // new-only
+    'TOI-26' => [],          // new-only
+    'TOI-27' => [],          // new-only
+    'TOI-28' => [],          // new-only
+    'TOI-29' => [],          // new-only
+    'TOI-30' => [],          // new-only
+    'TOI-31' => [],          // new-only
+    'TOI-32' => [],          // new-only
+    'TOI-33' => ['TOI-31'],  // ← old TOI-31
+    'TOI-34' => ['TOI-32'],  // ← old TOI-32
+
+    // ============================================================
+    // COS - Cost of Sales
+    // ============================================================
+    'COS-1' => ['COS-1'],
+    'COS-2' => [],           // new-only (ML Shop - Jewelry)
+    'COS-3' => [],           // new-only (Online Live Selling)
+    'COS-4' => [],           // new-only (Jewelry - Cost of Sales)
+    'COS-5' => ['COS-2'],    // ← old COS-2 (Special Products)
+    'COS-6' => ['COS-3'],    // ← old COS-3 (Telecommunication)
+    'COS-7' => ['COS-4'],    // ← old COS-4 (ML Kargo)
+    'COS-8' => [],           // new-only
+    'COS-9' => [],           // new-only
+
+    // ============================================================
+    // TPE - Personnel Expense (1:1)
+    // ============================================================
+    'TPE-1' => ['TPE-1'],
+    'TPE-2' => ['TPE-2'],
+    'TPE-3' => ['TPE-3'],
+    'TPE-4' => ['TPE-4'],
+    'TPE-5' => ['TPE-5'],
+    'TPE-6' => ['TPE-6'],
+    'TPE-7' => ['TPE-7'],
+
+    // ============================================================
+    // TAE - Admin Expense (SHIFTED for TAE-15 onwards)
+    // ============================================================
+    'TAE-1' => ['TAE-1'],
+    'TAE-2' => ['TAE-2'],
+    'TAE-3' => ['TAE-3'],
+    'TAE-4' => ['TAE-4'],
+    'TAE-5' => ['TAE-5'],
+    'TAE-6' => ['TAE-6'],
+    'TAE-7' => ['TAE-7'],
+    'TAE-8' => ['TAE-8'],
+    'TAE-9' => ['TAE-9'],
+    'TAE-10' => ['TAE-10'],
+    'TAE-11' => ['TAE-11'],
+    'TAE-12' => ['TAE-12'],
+    'TAE-13' => ['TAE-13'],
+    'TAE-14' => ['TAE-14'],
+    'TAE-15' => [],          // new-only (Dues and Membership)
+    'TAE-16' => ['TAE-15'],  // ← old TAE-15 (Rep. & Entertainment)
+    'TAE-17' => ['TAE-16'],  // ← old TAE-16 (Store, Appraisal & Cleaning)
+    'TAE-18' => ['TAE-17'],  // ← old TAE-17 (Finder's Fee)
+    'TAE-19' => ['TAE-18'],  // ← old TAE-18 (Insurance Incentive)
+    'TAE-20' => ['TAE-19'],  // ← old TAE-19 (Insurance Expense)
+    'TAE-21' => ['TAE-20'],  // ← old TAE-20 (Miscellaneous)
+    'TAE-22' => ['TAE-21'],  // ← old TAE-21 (Software Maintenance)
+    'TAE-23' => ['TAE-22'],  // ← old TAE-22 (Loss on Robbery)
+    'TAE-24' => ['TAE-24'],
+    'TAE-25' => ['TAE-25'],
+
+    // ============================================================
+    // DAE, IEX, PIT (1:1)
+    // ============================================================
+    'DAE-1' => ['DAE-1'],
+    'DAE-2' => ['DAE-2'],
+    'IEX-1' => ['IEX-1'],
+    'PIT-1' => ['PIT-1'],
+];
 }
 
 // ============================================================
@@ -4215,8 +4434,25 @@ function validateForm() {
 
     } else if (glCodeMode === 'mixed') {
 
-        // Mixed mode allows periods from both sides of the cutoff.
-        // No additional validation needed for Primary and Previous.
+        // Mixed mode is only allowed when the Primary and Previous
+        // periods straddle the old/new GL cutoff.
+        const primaryIsOld   = isMarch2026OrEarlier(primaryPeriod);
+        const primaryIsNew   = isApril2026OrLater(primaryPeriod);
+        const previousIsOld  = isMarch2026OrEarlier(previousPeriod);
+        const previousIsNew  = isApril2026OrLater(previousPeriod);
+
+        const straddlesCutoff =
+            (primaryIsOld && previousIsNew) ||
+            (primaryIsNew && previousIsOld);
+
+        if (!straddlesCutoff) {
+
+            showModal(
+                'Mix GL Code is only available when the Primary and Previous periods overlap the old/new GL cutoff. One period must be March 2026 or earlier and the other must be April 2026 or later.'
+            );
+
+            return false;
+        }
     }
 
     return true;
