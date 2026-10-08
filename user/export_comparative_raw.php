@@ -25,6 +25,7 @@ $mainzone = $_GET['mainzone'] ?? '';
 $zone = $_GET['zone'] ?? '';
 $selected_regions = $_GET['region'] ?? [];
 $selected_areas = $_GET['area'] ?? [];
+$selected_branches = $_GET['branch'] ?? []; // NEW: Branch filter
 $transaction_year = $_GET['transaction_year'] ?? '';
 $primary_period = $_GET['primary_period'] ?? '';
 $previous_period = $_GET['previous_period'] ?? '';
@@ -37,8 +38,12 @@ if (!is_array($selected_regions)) {
 if (!is_array($selected_areas)) {
     $selected_areas = $selected_areas !== '' ? [$selected_areas] : [];
 }
+if (!is_array($selected_branches)) {
+    $selected_branches = $selected_branches !== '' ? [$selected_branches] : [];
+}
 $selected_regions = array_values(array_filter(array_map('trim', $selected_regions), fn($v) => $v !== ''));
 $selected_areas = array_values(array_filter(array_map('trim', $selected_areas), fn($v) => $v !== ''));
+$selected_branches = array_values(array_filter(array_map('trim', $selected_branches), fn($v) => $v !== ''));
 
 // Helper functions
 function compareMonths(string $month1, string $month2): int {
@@ -84,7 +89,18 @@ if (!empty($primary_period) && !empty($previous_period)) {
                 $valid_filters = true;
             }
         } elseif ($gl_code_mode === 'mixed') {
-            $valid_filters = true;
+            // Mixed mode: one period must be March 2026 or earlier, the other April 2026 or later
+            $primary_is_old = isMarch2026OrEarlier($primary_period);
+            $primary_is_new = isApril2026OrLater($primary_period);
+            $previous_is_old = isMarch2026OrEarlier($previous_period);
+            $previous_is_new = isApril2026OrLater($previous_period);
+
+            // Check for overlap
+            $has_overlap = ($primary_is_old && $previous_is_new) || ($primary_is_new && $previous_is_old);
+
+            if ($has_overlap) {
+                $valid_filters = true;
+            }
         }
     }
 }
@@ -92,15 +108,79 @@ if (!empty($primary_period) && !empty($previous_period)) {
 // Get hierarchy data
 $distinct_reg = [];
 $distinct_area = [];
+$distinct_branches = [];
 $mz_to_zn = [];
+$mz_to_reg = [];
 $zn_to_reg = [];
 $reg_to_area = [];
+$area_to_branch = [];
+$branch_info = [];
 
+// Updated query to get distinct branches
+$branch_query = "
+    SELECT DISTINCT branch_id, branch_name, area as area, region
+    FROM fs_reports.fs_raw_data_summary
+    WHERE branch_id IS NOT NULL AND branch_id != ''
+    AND branch_name IS NOT NULL AND branch_name != ''
+    ORDER BY branch_name
+";
+$branch_res = mysqli_query($conn, $branch_query);
+if ($branch_res) {
+    while ($b = mysqli_fetch_assoc($branch_res)) {
+        $branch_id = trim((string)($b['branch_id'] ?? ''));
+        $branch_name = trim((string)($b['branch_name'] ?? ''));
+        $area = trim((string)($b['area'] ?? ''));
+        $region = trim((string)($b['region'] ?? ''));
+        
+        if ($branch_id !== '' && $branch_name !== '') {
+            $branch_key = $branch_id . '|' . $branch_name;
+            if (!in_array($branch_key, $distinct_branches, true)) {
+                $distinct_branches[] = $branch_key;
+            }
+            
+            // Store branch info
+            $branch_info[$branch_key] = [
+                'id' => $branch_id,
+                'name' => $branch_name,
+                'area' => $area,
+                'region' => $region
+            ];
+            
+            // Map area to branches
+            if ($area !== '') {
+                $area_to_branch[$area] = $area_to_branch[$area] ?? [];
+                if (!in_array($branch_key, $area_to_branch[$area], true)) {
+                    $area_to_branch[$area][] = $branch_key;
+                }
+            }
+        }
+    }
+}
+
+// Sort branches numerically by branch_id for distinct_branches
+usort($distinct_branches, function($a, $b) {
+    $a_id = explode('|', $a)[0];
+    $b_id = explode('|', $b)[0];
+    return intval($a_id) - intval($b_id);
+});
+
+// Sort each area's branches numerically by branch_id
+foreach ($area_to_branch as $area => $branches) {
+    usort($area_to_branch[$area], function($a, $b) {
+        $a_parts = explode('|', $a);
+        $b_parts = explode('|', $b);
+        $a_id = isset($a_parts[0]) ? $a_parts[0] : '0';
+        $b_id = isset($b_parts[0]) ? $b_parts[0] : '0';
+        return intval($a_id) - intval($b_id);
+    });
+}
+
+// Updated hierarchy query to include branch_id and branch_name
 $hierarchy_query = "
-    SELECT DISTINCT mainzone, zone, region, area
-    FROM fs_reports.comparative_report
+    SELECT DISTINCT mainzone, mlmatic_zone as zone, region, area as area
+    FROM fs_reports.fs_raw_data_summary
     WHERE mainzone IS NOT NULL AND mainzone != ''
-    ORDER BY mainzone, zone, region, area
+    ORDER BY mainzone, mlmatic_zone, region, area
 ";
 $hierarchy_res = mysqli_query($conn, $hierarchy_query);
 if ($hierarchy_res) {
@@ -116,6 +196,10 @@ if ($hierarchy_res) {
         if ($mz !== '' && $zn !== '') {
             $mz_to_zn[$mz] = $mz_to_zn[$mz] ?? [];
             if (!in_array($zn, $mz_to_zn[$mz], true)) $mz_to_zn[$mz][] = $zn;
+        }
+        if ($mz !== '' && $rg !== '') {
+            $mz_to_reg[$mz] = $mz_to_reg[$mz] ?? [];
+            if (!in_array($rg, $mz_to_reg[$mz], true)) $mz_to_reg[$mz][] = $rg;
         }
         if ($zn !== '' && $rg !== '') {
             $zn_to_reg[$zn] = $zn_to_reg[$zn] ?? [];
@@ -237,6 +321,7 @@ function compute_table_rows_for_export(
     array $sort_order_descriptions,
     string $region,
     string $area,
+    array $selected_branches,
     bool $valid_filters
 ): array {
     $where_conditions = [];
@@ -249,7 +334,7 @@ function compute_table_rows_for_export(
         $types .= "s";
     }
     if (!empty($zone)) {
-        $where_conditions[] = "zone = ?";
+        $where_conditions[] = "mlmatic_zone = ?";
         $params[] = $zone;
         $types .= "s";
     }
@@ -263,6 +348,23 @@ function compute_table_rows_for_export(
         $params[] = $area;
         $types .= "s";
     }
+    if (!empty($selected_branches)) {
+        $branch_conditions = [];
+        foreach ($selected_branches as $branch) {
+            $branch_parts = explode('|', $branch);
+            if (count($branch_parts) == 2) {
+                $branch_id = trim($branch_parts[0]);
+                $branch_name = trim($branch_parts[1]);
+                $branch_conditions[] = "(branch_id = ? AND branch_name = ?)";
+                $params[] = $branch_id;
+                $params[] = $branch_name;
+                $types .= "ss";
+            }
+        }
+        if (!empty($branch_conditions)) {
+            $where_conditions[] = "(" . implode(" OR ", $branch_conditions) . ")";
+        }
+    }
     if (!empty($transaction_year)) {
         $where_conditions[] = "transaction_year = ?";
         $params[] = $transaction_year;
@@ -270,7 +372,6 @@ function compute_table_rows_for_export(
     }
 
     $base_where = !empty($where_conditions) ? "WHERE " . implode(" AND ", $where_conditions) : "WHERE 1=1";
-    $base_where .= " AND (status_void IS NULL OR status_void != 'Void')";
 
     // Primary period data
     $primary_data = [];
@@ -284,7 +385,7 @@ function compute_table_rows_for_export(
                 gl_code,
                 SUM(CASE WHEN transaction_type = 'Branch' THEN amount ELSE 0 END) as branch_amount,
                 SUM(CASE WHEN transaction_type = 'Showroom' THEN amount ELSE 0 END) as showroom_amount
-            FROM fs_reports.comparative_report
+            FROM fs_reports.fs_raw_data_summary
             $base_where
             AND transaction_year = ? AND transaction_month = ?
             AND gl_code IS NOT NULL AND gl_code != ''
@@ -323,7 +424,7 @@ function compute_table_rows_for_export(
                 gl_code,
                 SUM(CASE WHEN transaction_type = 'Branch' THEN amount ELSE 0 END) as branch_amount,
                 SUM(CASE WHEN transaction_type = 'Showroom' THEN amount ELSE 0 END) as showroom_amount
-            FROM fs_reports.comparative_report
+            FROM fs_reports.fs_raw_data_summary
             $base_where
             AND transaction_year = ? AND transaction_month = ?
             AND gl_code IS NOT NULL AND gl_code != ''
@@ -480,7 +581,7 @@ function compute_table_rows_for_export(
         $inc_dec = $total_primary_total - $total_previous_total;
         $percentage = 0;
         if ($total_previous_total != 0) {
-            $percentage = ($inc_dec / $total_previous_total) * 100;
+            $percentage = ($inc_dec / abs($total_previous_total)) * 100;
         } elseif ($total_primary_total != 0) {
             $percentage = 100;
         }
@@ -715,7 +816,6 @@ function setManualColumnWidths(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sh
 }
 
 // Function to apply border styles to specific rows
-// Function to apply border styles to specific rows
 function applyBorderStyles(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, int $row, string $label, int $startColumnIndex = 1): void {
     // E..N (include spacers H and L)
     $columnOffsets = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
@@ -759,24 +859,54 @@ $spreadsheet->getProperties()
 
 // Build export data for each combination
 $export_combinations = [];
-if (!empty($selected_regions)) {
-    foreach ($selected_regions as $rg) {
-        $allowed_areas = $reg_to_area[$rg] ?? [];
-        $areas_for_region = [];
-        if (!empty($selected_areas)) {
-            foreach ($selected_areas as $ar) {
-                if (in_array($ar, $allowed_areas, true)) {
-                    $areas_for_region[] = $ar;
-                }
-            }
+
+// If branches are selected, create a separate sheet for each branch
+if (!empty($selected_branches)) {
+    foreach ($selected_branches as $branch_key) {
+        if (isset($branch_info[$branch_key])) {
+            $info = $branch_info[$branch_key];
+            $export_combinations[] = [
+                'region' => $info['region'] ?: 'Unknown Region',
+                'areas' => [$info['area'] ?: ''],
+                'branches' => [$branch_key],
+                'branch_names' => [$info['name']],
+                'branch_id' => $info['id'],
+                'is_individual_branch' => true
+            ];
         }
-        if (empty($areas_for_region)) {
-            $areas_for_region = [''];
-        }
-        $export_combinations[] = ['region' => $rg, 'areas' => $areas_for_region];
     }
 } else {
-    $export_combinations[] = ['region' => '', 'areas' => ['']];
+    if (!empty($selected_regions)) {
+        foreach ($selected_regions as $rg) {
+            $allowed_areas = $reg_to_area[$rg] ?? [];
+            $areas_for_region = [];
+            if (!empty($selected_areas)) {
+                foreach ($selected_areas as $ar) {
+                    if (in_array($ar, $allowed_areas, true)) {
+                        $areas_for_region[] = $ar;
+                    }
+                }
+            }
+            if (empty($areas_for_region)) {
+                $areas_for_region = [''];
+            }
+            $export_combinations[] = [
+                'region' => $rg,
+                'areas' => $areas_for_region,
+                'branches' => [],
+                'branch_names' => [],
+                'is_individual_branch' => false
+            ];
+        }
+    } else {
+        $export_combinations[] = [
+            'region' => '',
+            'areas' => [''],
+            'branches' => [],
+            'branch_names' => [],
+            'is_individual_branch' => false
+        ];
+    }
 }
 
 $current_row = 1;
@@ -785,6 +915,9 @@ $sheet_index = 0;
 foreach ($export_combinations as $index => $combo) {
     $region_name = $combo['region'];
     $areas_for_region = $combo['areas'] ?? [''];
+    $branches_for_combo = $combo['branches'] ?? [];
+    $branch_names_for_combo = $combo['branch_names'] ?? [];
+    $is_individual_branch = $combo['is_individual_branch'] ?? false;
     
     // Create new sheet for each region (first one uses existing sheet)
     if ($sheet_index > 0) {
@@ -797,7 +930,11 @@ foreach ($export_combinations as $index => $combo) {
     $sheet->freezePane('A10');
     
     // Set sheet title
-    $sheet_title = !empty($region_name) ? substr($region_name, 0, 31) : 'NATIONWIDE';
+    if ($is_individual_branch && !empty($branch_names_for_combo)) {
+        $sheet_title = substr($branch_names_for_combo[0], 0, 31);
+    } else {
+        $sheet_title = !empty($region_name) ? substr($region_name, 0, 31) : 'NATIONWIDE';
+    }
     $sheet->setTitle($sheet_title);
 
     // Format period names
@@ -814,6 +951,10 @@ foreach ($export_combinations as $index => $combo) {
         setManualColumnWidths($sheet, $startColumnIndex);
 
         $area_display = !empty($area_name) ? 'AREA ' . $area_name : '';
+        $branch_display = '';
+        if ($is_individual_branch && !empty($branch_names_for_combo)) {
+            $branch_display = 'BRANCH: ' . strtoupper($branch_names_for_combo[0]);
+        }
 
         $rows = compute_table_rows_for_export(
             $conn,
@@ -829,6 +970,7 @@ foreach ($export_combinations as $index => $combo) {
             $sort_order_descriptions,
             $region_name,
             $area_name,
+            $branches_for_combo,
             $valid_filters
         );
 
@@ -872,8 +1014,12 @@ foreach ($export_combinations as $index => $combo) {
         $sheet->getStyle(cellAddr($startColumnIndex, 0, $current_row))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $current_row++;
 
-        // Row 5: AREA
-        $sheet->setCellValue(cellAddr($startColumnIndex, 0, $current_row), $area_display);
+        // Row 5: AREA / BRANCH
+        $area_branch_text = $area_display;
+        if (!empty($branch_display)) {
+            $area_branch_text .= ($area_branch_text ? ' - ' : '') . $branch_display;
+        }
+        $sheet->setCellValue(cellAddr($startColumnIndex, 0, $current_row), $area_branch_text);
         $sheet->mergeCells(rangeAddr($startColumnIndex, 0, 14, $current_row));
         $sheet->getStyle(cellAddr($startColumnIndex, 0, $current_row))->getFont()->setBold(true)->setSize(16);
         $sheet->getStyle(cellAddr($startColumnIndex, 0, $current_row))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);

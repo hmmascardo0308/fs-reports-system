@@ -84,7 +84,18 @@ if (!empty($primary_period) && !empty($previous_period)) {
                 $valid_filters = true;
             }
         } elseif ($gl_code_mode === 'mixed') {
-            $valid_filters = true;
+            // Mixed mode: one period must be March 2026 or earlier, the other April 2026 or later
+            $primary_is_old = isMarch2026OrEarlier($primary_period);
+            $primary_is_new = isApril2026OrLater($primary_period);
+            $previous_is_old = isMarch2026OrEarlier($previous_period);
+            $previous_is_new = isApril2026OrLater($previous_period);
+
+            // Check for overlap
+            $has_overlap = ($primary_is_old && $previous_is_new) || ($primary_is_new && $previous_is_old);
+
+            if ($has_overlap) {
+                $valid_filters = true;
+            }
         }
     }
 }
@@ -714,7 +725,6 @@ function setManualColumnWidths(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sh
     }
 }
 
-// Function to apply border styles to specific rows
 // Function to apply border styles to specific rows
 function applyBorderStyles(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, int $row, string $label, int $startColumnIndex = 1): void {
     // E..N (include spacers H and L)

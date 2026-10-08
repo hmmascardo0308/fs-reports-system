@@ -80,6 +80,20 @@ if (!empty($primary_period) && !empty($previous_period)) {
                 $error_message = 'New GL Code is only available for April 2026 onwards. Both selected periods must be April 2026 or later.';
                 $show_error = true;
             }
+        } elseif ($gl_code_mode === 'mixed') {
+            // Mixed mode: one period must be March 2026 or earlier, the other April 2026 or later
+            $primary_is_old = isMarch2026OrEarlier($primary_period);
+            $primary_is_new = isApril2026OrLater($primary_period);
+            $previous_is_old = isMarch2026OrEarlier($previous_period);
+            $previous_is_new = isApril2026OrLater($previous_period);
+
+            // Check for overlap
+            $has_overlap = ($primary_is_old && $previous_is_new) || ($primary_is_new && $previous_is_old);
+
+            if (!$has_overlap) {
+                $error_message = 'Mix GL Code is only available when the Primary and Previous periods overlap the old/new GL cutoff. One period must be March 2026 or earlier and the other must be April 2026 or later.';
+                $show_error = true;
+            }
         }
     }
     
@@ -576,7 +590,7 @@ foreach ($grouped_rows as $sort_order => $rows) {
     $inc_dec = $total_primary_total - $total_previous_total;
     $percentage = 0;
     if ($total_previous_total != 0) {
-        $percentage = ($inc_dec / $total_previous_total) * 100;
+        $percentage = ($inc_dec / abs($total_previous_total)) * 100;
     } elseif ($total_primary_total != 0) {
         $percentage = 100;
     }
@@ -1331,6 +1345,20 @@ if (!empty($selected_branches)) {
                     } else if (glCodeMode === 'new') {
                         if (!isApril2026OrLater(primaryPeriod) || !isApril2026OrLater(previousPeriod)) {
                             showModal('New GL Code is only available for April 2026 onwards. Both selected periods must be April 2026 or later.');
+                            return false;
+                        }
+                    } else if (glCodeMode === 'mixed') {
+                        // Mixed mode: one period must be March 2026 or earlier, the other April 2026 or later
+                        const primaryIsOld = isMarch2026OrEarlier(primaryPeriod);
+                        const primaryIsNew = isApril2026OrLater(primaryPeriod);
+                        const previousIsOld = isMarch2026OrEarlier(previousPeriod);
+                        const previousIsNew = isApril2026OrLater(previousPeriod);
+
+                        // Check for overlap
+                        const hasOverlap = (primaryIsOld && previousIsNew) || (primaryIsNew && previousIsOld);
+
+                        if (!hasOverlap) {
+                            showModal('Mix GL Code is only available when the Primary and Previous periods overlap the old/new GL cutoff. One period must be March 2026 or earlier and the other must be April 2026 or later.');
                             return false;
                         }
                     }
