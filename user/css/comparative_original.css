@@ -855,6 +855,27 @@ transform: translateY(-2px);
 
 }
 
+.btn-allocate {
+background-color: #b99a10;
+color: white;
+padding: 8px 16px;
+font-size: 14px;
+border-radius: 8px;
+text-decoration: none;
+font-weight: 500;
+transition: background-color 0.2s ease;
+display: inline-flex;
+align-items: center;
+gap: 8px;
+border: 2px solid #ffffff;
+}
+
+.btn-allocate:hover {
+background-color: #7f6906;
+transform: translateY(-2px);
+
+}
+
  * {
     transition: none !important;
 } 

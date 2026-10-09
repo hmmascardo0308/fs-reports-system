@@ -3339,6 +3339,15 @@ $table_rows =
                     Export Excel
                 </a>
 
+
+                <a
+                    href="comparative_report_original_ho_with_past_and_adjustment_allocate_amount.php"
+                    class="btn-allocate"
+                >
+                    <i class="fa-solid fa-file-excel"></i>
+                    Allocate Amount
+                </a>
+
                 <a
                     href="?reset=1"
                     class="btn-reset"
