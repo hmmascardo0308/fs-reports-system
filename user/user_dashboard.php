@@ -6,7 +6,6 @@ require_once __DIR__ . '/../config/config.php';
 $just_logged_in = false;
 if (isset($_SESSION['just_logged_in']) && $_SESSION['just_logged_in'] === true) {
     $just_logged_in = true;
-    // Clear the flag so it only shows once
     unset($_SESSION['just_logged_in']);
 }
 
@@ -29,7 +28,7 @@ $user_id    = $_SESSION['user_id'] ?? 0;
 $last_online = null;
 $is_default_password = false;
 
-$db_password = null; // Initialize to prevent "Undefined variable" notice
+$db_password = null;
 if (!empty($username)) {
     $stmt = $conn->prepare("
         SELECT last_online, password 
@@ -43,8 +42,7 @@ if (!empty($username)) {
     $stmt->fetch();
     $stmt->close();
     
-    // Check if password is the default password
-      if ($db_password !== null && password_verify('Mlinc1234', $db_password)) {
+    if ($db_password !== null && password_verify('Mlinc1234', $db_password)) {
         $is_default_password = true;
     }
 }
@@ -58,9 +56,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['change_password'])) {
     $new_password = $_POST['new_password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
     
-    $stored_password = null; // Initialize to prevent "Undefined variable" notice
+    $stored_password = null;
     
-    // Verify current password
     $stmt = $conn->prepare("SELECT password FROM fs_user WHERE id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -68,7 +65,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['change_password'])) {
     $stmt->fetch();
     $stmt->close();
     
-    // Check if stored_password is not null before verification
     if ($stored_password === null) {
         $password_error = "User account not found.";
     } elseif (!password_verify($current_password, $stored_password)) {
@@ -88,7 +84,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['change_password'])) {
     } elseif ($new_password === 'Mlinc1234') {
         $password_error = "New password cannot be the default password.";
     } else {
-        // Update password
         $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
         $update = $conn->prepare("UPDATE fs_user SET password = ? WHERE id = ?");
         $update->bind_param("si", $hashed_password, $user_id);
@@ -97,11 +92,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['change_password'])) {
             $password_success = "Password changed successfully!";
             $is_default_password = false;
             
-            // Set a session flag to show success message and refresh
             $_SESSION['password_change_success'] = true;
             $_SESSION['success_message'] = "Password changed successfully!";
             
-            // Refresh the page to hide the modal
             header("Location: " . $_SERVER['PHP_SELF']);
             exit;
         } else {
@@ -111,13 +104,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['change_password'])) {
     }
 }
 
-// Check if we need to show a success message from session
 $show_success_message = false;
 $success_message = '';
 if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_success']) {
     $show_success_message = true;
     $success_message = $_SESSION['success_message'] ?? 'Password changed successfully!';
-    // Clear the session flags
     unset($_SESSION['password_change_success']);
     unset($_SESSION['success_message']);
 }
@@ -133,6 +124,7 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
     <title>Dashboard | Control Panel</title>
     <link rel="icon" href="../images/MLW%20Logo.png" type="image/png"/>
     
+   
 </head>
 <body>
 
@@ -154,7 +146,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
     </div>
     
     <script>
-        // Auto-hide after 5 seconds and refresh
         setTimeout(function() {
             const overlay = document.getElementById('signin-overlay');
             if (overlay) {
@@ -273,7 +264,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
         <span class="close-toast" onclick="this.parentElement.remove()">&times;</span>
     </div>
     <script>
-        // Auto-hide toast after 3 seconds
         setTimeout(function() {
             var toast = document.getElementById('successToast');
             if (toast) {
@@ -314,7 +304,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
             </li>
             
             <?php if ($user_type === "admin" || $user_type === "reports" || $user_type === "bookkeeper") : ?>
-                <!-- Comparative Report Dropdown -->
                 <li class="has-dropdown">
                     <a href="javascript:void(0)" class="dropdown-trigger">
                         <i class="fas fa-chart-bar"></i>
@@ -372,14 +361,12 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                                 </a>
                             </li>
                         <?php endif; ?>
-
                     </ul>
                 </li>
             <?php endif; ?>
 
             <?php if ($user_type === "admin") : ?>
                 <?php
-                // Get count of pending password reset requests
                 $pending_count = 0;
                 $count_query = "SELECT COUNT(*) as total FROM fs_reports.password_reset_requests WHERE status = 'Pending'";
                 $count_result = $conn->query($count_query);
@@ -474,7 +461,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                     <div>
                         <span class="info-label">Last Login:</span>
                         <?php
-                            // Ensure $last_online is set and not null before using it
                             if (isset($last_online) && !empty($last_online)) {
                                 echo date('F j, Y h:i:s A', strtotime($last_online));
                             } else {
@@ -483,12 +469,7 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                         ?>
                     </div>
                 </div>
-                <div class="system-stats">
-                    <!-- <div class="stat">
-                        <span class="stat-value"><?php echo date('F Y'); ?></span>
-                        <span class="stat-label">Current Period</span>
-                    </div> -->
-                </div>
+                <div class="system-stats"></div>
             </div>
         </div>
         
@@ -504,6 +485,40 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
             </div>
         <?php endif; ?>
     </main>
+
+    <!-- ========== ADMIN STICKY NOTE (hardcoded) ========== -->
+    <div id="adminStickyNote" class="admin-sticky-note">
+        <div class="sticky-header">
+            <div class="sticky-title">
+                <i class="fas fa-thumbtack"></i> Admin Reminder
+            </div>
+            <div class="sticky-actions">
+                <button class="sticky-btn minimize-btn" title="Minimize" onclick="minimizeSticky()">
+                    <i class="fas fa-minus"></i>
+                </button>
+                <button class="sticky-btn close-btn" title="Close" onclick="closeSticky()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="sticky-body">
+• Please upload monthly report <b>(either per region-area or per zone)</b>.
+• To track imported data per month, check <b>Monthly Data</b>
+• <b>Generating</b> comparative report <b>per branch</b> is already functional <b>(from raw data)</b>. 
+• Manual adjustment for HO allocated is already update <b>(for wHO page 5)</b>.
+• Upload previous year month transactions in <b>Previous Report</b>.
+• For assistance, please contact the admin team.
+        </div>
+        <div class="sticky-footer">
+            — FS Admin
+        </div>
+    </div>
+
+    <!-- Minimized Bell (appears when sticky is minimized) -->
+    <div id="stickyBell" class="sticky-bell" onclick="expandSticky()" title="Open Admin Reminder">
+        <i class="fas fa-bell"></i>
+        <span class="bell-badge">1</span>
+    </div>
 
     <!-- Upload Report Selection Modal -->
     <div id="uploadFileModal" class="password-modal">
@@ -563,7 +578,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
             }
         }
         
-        // Close modal
         function closeModal() {
             document.getElementById('passwordChangeModal').classList.remove('show');
         }
@@ -576,7 +590,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
             document.getElementById('uploadFileModal').classList.remove('show');
         }
 
-        // Reported Transactions Modal functions
         function openReportedTransactionsModal() {
             document.getElementById('reportedTransactionsModal').classList.add('show');
         }
@@ -584,10 +597,34 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
         function closeReportedTransactionsModal() {
             document.getElementById('reportedTransactionsModal').classList.remove('show');
         }
+
+        // ========== Sticky Note Controls ==========
+        function minimizeSticky() {
+            const sticky = document.getElementById('adminStickyNote');
+            const bell = document.getElementById('stickyBell');
+            
+            sticky.classList.add('minimized');
+            bell.classList.add('show');
+        }
+
+        function expandSticky() {
+            const sticky = document.getElementById('adminStickyNote');
+            const bell = document.getElementById('stickyBell');
+            
+            sticky.classList.remove('minimized');
+            bell.classList.remove('show');
+        }
+
+        function closeSticky() {
+            const sticky = document.getElementById('adminStickyNote');
+            const bell = document.getElementById('stickyBell');
+            
+            sticky.style.display = 'none';
+            bell.classList.remove('show');
+        }
         
-        // Dropdown toggle functionality
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize dropdown toggles
+            // Dropdown toggles
             const dropdownTriggers = document.querySelectorAll('.dropdown-trigger');
             
             dropdownTriggers.forEach(trigger => {
@@ -597,7 +634,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                     const dropdownMenu = parent.querySelector('.dropdown-menu');
                     const icon = this.querySelector('.dropdown-icon');
                     
-                    // Close other open dropdowns
                     dropdownTriggers.forEach(otherTrigger => {
                         if (otherTrigger !== trigger) {
                             const otherParent = otherTrigger.closest('.has-dropdown');
@@ -610,7 +646,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                         }
                     });
                     
-                    // Toggle current dropdown
                     dropdownMenu.classList.toggle('show');
                     if (icon) {
                         icon.classList.toggle('rotate');
@@ -618,7 +653,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                 });
             });
             
-            // Close dropdowns when clicking outside
             document.addEventListener('click', function(e) {
                 if (!e.target.closest('.has-dropdown')) {
                     document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
@@ -635,7 +669,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
             modals.forEach(modal => {
                 modal.addEventListener('click', function(e) {
                     if (e.target === modal) {
-                        // Don't close if it's the password change modal with default password
                         if (modal.id === 'passwordChangeModal' && <?php echo $is_default_password ? 'true' : 'false'; ?>) {
                             return;
                         }
@@ -651,7 +684,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                 newPassword.addEventListener('input', function() {
                     const password = this.value;
                     
-                    // Check length
                     const reqLength = document.getElementById('req-length');
                     if (password.length >= 8) {
                         reqLength.className = 'valid';
@@ -661,7 +693,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                         reqLength.innerHTML = '<i class="fas fa-times-circle"></i> At least 8 characters';
                     }
                     
-                    // Check uppercase
                     const reqUppercase = document.getElementById('req-uppercase');
                     if (/[A-Z]/.test(password)) {
                         reqUppercase.className = 'valid';
@@ -671,7 +702,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                         reqUppercase.innerHTML = '<i class="fas fa-times-circle"></i> At least one uppercase letter';
                     }
                     
-                    // Check lowercase
                     const reqLowercase = document.getElementById('req-lowercase');
                     if (/[a-z]/.test(password)) {
                         reqLowercase.className = 'valid';
@@ -681,7 +711,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                         reqLowercase.innerHTML = '<i class="fas fa-times-circle"></i> At least one lowercase letter';
                     }
                     
-                    // Check number
                     const reqNumber = document.getElementById('req-number');
                     if (/[0-9]/.test(password)) {
                         reqNumber.className = 'valid';
@@ -691,7 +720,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                         reqNumber.innerHTML = '<i class="fas fa-times-circle"></i> At least one number';
                     }
                     
-                    // Check special character
                     const reqSpecial = document.getElementById('req-special');
                     if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
                         reqSpecial.className = 'valid';
@@ -701,7 +729,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                         reqSpecial.innerHTML = '<i class="fas fa-times-circle"></i> At least one special character';
                     }
                     
-                    // Check not default password
                     const reqNotDefault = document.getElementById('req-not-default');
                     if (password !== 'Mlinc1234') {
                         reqNotDefault.className = 'valid';
@@ -713,7 +740,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                 });
             }
             
-            // Prevent closing modal if default password
             <?php if ($is_default_password): ?>
                 const modal = document.getElementById('passwordChangeModal');
                 modal.addEventListener('click', function(e) {
@@ -723,11 +749,46 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                     }
                 });
             <?php endif; ?>
+
+            // ========== Admin Sticky Note – Drag ==========
+            const sticky = document.getElementById('adminStickyNote');
+            if (sticky) {
+                const header = sticky.querySelector('.sticky-header');
+                let isDragging = false;
+                let startX, startY, startLeft, startTop;
+
+                header.addEventListener('mousedown', function (e) {
+                    // Don't start drag if clicking buttons
+                    if (e.target.closest('.sticky-btn')) return;
+
+                    isDragging = true;
+                    sticky.classList.add('dragging');
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    startLeft = parseInt(sticky.style.left) || sticky.offsetLeft;
+                    startTop  = parseInt(sticky.style.top)  || sticky.offsetTop;
+                    e.preventDefault();
+                });
+
+                document.addEventListener('mousemove', function (e) {
+                    if (!isDragging) return;
+                    const dx = e.clientX - startX;
+                    const dy = e.clientY - startY;
+                    sticky.style.left = (startLeft + dx) + 'px';
+                    sticky.style.top  = (startTop  + dy) + 'px';
+                });
+
+                document.addEventListener('mouseup', function () {
+                    if (isDragging) {
+                        isDragging = false;
+                        sticky.classList.remove('dragging');
+                    }
+                });
+            }
         });
     </script>
 
 <?php include '../footer.php'; ?>
-
 
 </body>
 </html>

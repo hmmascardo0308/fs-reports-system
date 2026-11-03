@@ -23,97 +23,83 @@ $mainzone = $_GET['mainzone'] ?? '';
 $zone = $_GET['zone'] ?? '';
 $selected_regions = $_GET['region'] ?? [];
 $selected_areas = $_GET['area'] ?? [];
-$selected_branches = $_GET['branch'] ?? []; // NEW: Branch filter
+$selected_branches = $_GET['branch'] ?? [];
 $transaction_year = $_GET['transaction_year'] ?? '';
 $primary_period = $_GET['primary_period'] ?? '';
 $previous_period = $_GET['previous_period'] ?? '';
-$gl_code_mode = $_GET['gl_code_mode'] ?? 'old'; // old|new|mixed
+$gl_code_mode = $_GET['gl_code_mode'] ?? 'old';
 $gl_code_mode = in_array($gl_code_mode, ['old', 'new', 'mixed'], true) ? $gl_code_mode : 'old';
 
-// Error messages for validation
 $error_message = '';
 
-// Helper function to compare months (format: YYYY-MM)
+/* ---------- Helper functions ---------- */
 function compareMonths(string $month1, string $month2): int {
     return strtotime($month1 . '-01') - strtotime($month2 . '-01');
 }
 
-// Helper function to check if a month is March 2026 or earlier
 function isMarch2026OrEarlier(string $month): bool {
     if (empty($month)) return true;
-    $cutoff = strtotime('2026-03-01');
-    $month_time = strtotime($month . '-01');
-    return $month_time <= $cutoff;
+    return strtotime($month . '-01') <= strtotime('2026-03-01');
 }
 
-// Helper function to check if a month is April 2026 or later
 function isApril2026OrLater(string $month): bool {
     if (empty($month)) return true;
-    $cutoff = strtotime('2026-04-01');
-    $month_time = strtotime($month . '-01');
-    return $month_time >= $cutoff;
+    return strtotime($month . '-01') >= strtotime('2026-04-01');
 }
 
-// Validate periods and GL code mode
+/** Convert 'YYYY-MM' to first/last day strings for BETWEEN */
+function monthBounds(string $ym): array {
+    $start = $ym . '-01';
+    $end   = date('Y-m-t', strtotime($start));
+    return [$start, $end];
+}
+
+/* ---------- Validation ---------- */
 $show_error = false;
 $valid_filters = false;
 
-// Only validate if both periods are provided
 if (!empty($primary_period) && !empty($previous_period)) {
-    // Validation 1: Primary period must be greater than previous period
     if (compareMonths($primary_period, $previous_period) <= 0) {
         $error_message = 'Primary period must be later than the Previous period.';
         $show_error = true;
     }
-    
-    // Validation 2: GL code mode restrictions based on periods
+
     if (!$show_error) {
         if ($gl_code_mode === 'old') {
-            // Old GL Code is only available for March 2026 and earlier
             if (!isMarch2026OrEarlier($primary_period) || !isMarch2026OrEarlier($previous_period)) {
                 $error_message = 'Old GL Code is only available for March 2026 and earlier. Both selected periods must be March 2026 or earlier.';
                 $show_error = true;
             }
         } elseif ($gl_code_mode === 'new') {
-            // New GL Code is only available for April 2026 and later
             if (!isApril2026OrLater($primary_period) || !isApril2026OrLater($previous_period)) {
                 $error_message = 'New GL Code is only available for April 2026 onwards. Both selected periods must be April 2026 or later.';
                 $show_error = true;
             }
         } elseif ($gl_code_mode === 'mixed') {
-            // Mixed mode: one period must be March 2026 or earlier, the other April 2026 or later
             $primary_is_old = isMarch2026OrEarlier($primary_period);
             $primary_is_new = isApril2026OrLater($primary_period);
             $previous_is_old = isMarch2026OrEarlier($previous_period);
             $previous_is_new = isApril2026OrLater($previous_period);
-
-            // Check for overlap
             $has_overlap = ($primary_is_old && $previous_is_new) || ($primary_is_new && $previous_is_old);
-
             if (!$has_overlap) {
                 $error_message = 'Mix GL Code is only available when the Primary and Previous periods overlap the old/new GL cutoff. One period must be March 2026 or earlier and the other must be April 2026 or later.';
                 $show_error = true;
             }
         }
     }
-    
-    // If no errors, set valid_filters to true
+
     if (!$show_error) {
         $valid_filters = true;
     }
 }
 
-if (!is_array($selected_regions)) {
-    $selected_regions = $selected_regions !== '' ? [$selected_regions] : [];
-}
-if (!is_array($selected_areas)) {
-    $selected_areas = $selected_areas !== '' ? [$selected_areas] : [];
-}
-if (!is_array($selected_branches)) {
-    $selected_branches = $selected_branches !== '' ? [$selected_branches] : [];
-}
-$selected_regions = array_values(array_filter(array_map('trim', $selected_regions), fn($v) => $v !== ''));
-$selected_areas = array_values(array_filter(array_map('trim', $selected_areas), fn($v) => $v !== ''));
+/* ---------- Normalize multi-selects ---------- */
+if (!is_array($selected_regions))  $selected_regions  = $selected_regions  !== '' ? [$selected_regions]  : [];
+if (!is_array($selected_areas))    $selected_areas    = $selected_areas    !== '' ? [$selected_areas]    : [];
+if (!is_array($selected_branches)) $selected_branches = $selected_branches !== '' ? [$selected_branches] : [];
+
+$selected_regions  = array_values(array_filter(array_map('trim', $selected_regions),  fn($v) => $v !== ''));
+$selected_areas    = array_values(array_filter(array_map('trim', $selected_areas),    fn($v) => $v !== ''));
 $selected_branches = array_values(array_filter(array_map('trim', $selected_branches), fn($v) => $v !== ''));
 
 if (isset($_GET['reset']) && $_GET['reset'] === '1') {
@@ -121,53 +107,48 @@ if (isset($_GET['reset']) && $_GET['reset'] === '1') {
     exit;
 }
 
-// Dropdown options + hierarchy maps
+/* =====================================================================
+   DROPDOWN OPTIONS + HIERARCHY MAPS
+   ===================================================================== */
 $distinct_mz = [];
 $distinct_zn = [];
 $distinct_reg = [];
 $distinct_area = [];
 $distinct_branches = [];
 $distinct_years = [];
-$month_options = [];
 
 $mz_to_zn = [];
 $mz_to_reg = [];
 $zn_to_reg = [];
 $reg_to_area = [];
 $area_to_branch = [];
-$branch_info = []; // NEW: Store branch info for display
+$branch_info = [];
 
-// Updated query to get distinct branches
+/* ---- Branch lookup (uses idx_area_branch) ---- */
 $branch_query = "
-    SELECT DISTINCT branch_id, branch_name, area as area, region
+    SELECT DISTINCT branch_id, branch_name, mlmatic_area AS area, region
     FROM fs_reports.fs_raw_data_summary
     WHERE branch_id IS NOT NULL AND branch_id != ''
-    AND branch_name IS NOT NULL AND branch_name != ''
+      AND branch_name IS NOT NULL AND branch_name != ''
     ORDER BY branch_name
 ";
 $branch_res = mysqli_query($conn, $branch_query);
 if ($branch_res) {
     while ($b = mysqli_fetch_assoc($branch_res)) {
-        $branch_id = trim((string)($b['branch_id'] ?? ''));
+        $branch_id   = trim((string)($b['branch_id'] ?? ''));
         $branch_name = trim((string)($b['branch_name'] ?? ''));
-        $area = trim((string)($b['area'] ?? ''));
-        $region = trim((string)($b['region'] ?? ''));
-        
+        $area        = trim((string)($b['area'] ?? ''));
+        $region      = trim((string)($b['region'] ?? ''));
+
         if ($branch_id !== '' && $branch_name !== '') {
             $branch_key = $branch_id . '|' . $branch_name;
             if (!in_array($branch_key, $distinct_branches, true)) {
                 $distinct_branches[] = $branch_key;
             }
-            
-            // Store branch info
             $branch_info[$branch_key] = [
-                'id' => $branch_id,
-                'name' => $branch_name,
-                'area' => $area,
-                'region' => $region
+                'id' => $branch_id, 'name' => $branch_name,
+                'area' => $area, 'region' => $region,
             ];
-            
-            // Map area to branches
             if ($area !== '') {
                 $area_to_branch[$area] = $area_to_branch[$area] ?? [];
                 if (!in_array($branch_key, $area_to_branch[$area], true)) {
@@ -178,30 +159,21 @@ if ($branch_res) {
     }
 }
 
-// Sort branches numerically by branch_id for distinct_branches
 usort($distinct_branches, function($a, $b) {
-    $a_id = explode('|', $a)[0];
-    $b_id = explode('|', $b)[0];
-    return intval($a_id) - intval($b_id);
+    return intval(explode('|', $a)[0]) - intval(explode('|', $b)[0]);
 });
-
-// Sort each area's branches numerically by branch_id
 foreach ($area_to_branch as $area => $branches) {
     usort($area_to_branch[$area], function($a, $b) {
-        $a_parts = explode('|', $a);
-        $b_parts = explode('|', $b);
-        $a_id = isset($a_parts[0]) ? $a_parts[0] : '0';
-        $b_id = isset($b_parts[0]) ? $b_parts[0] : '0';
-        return intval($a_id) - intval($b_id);
+        return intval(explode('|', $a)[0]) - intval(explode('|', $b)[0]);
     });
 }
 
-// Updated hierarchy query to include branch_id and branch_name
+/* ---- Hierarchy lookup (uses idx_hierarchy_lookup) ---- */
 $hierarchy_query = "
-    SELECT DISTINCT mainzone, mlmatic_zone as zone, region, area as area
+    SELECT DISTINCT mainzone, mlmatic_zone AS zone, region, mlmatic_area AS area
     FROM fs_reports.fs_raw_data_summary
     WHERE mainzone IS NOT NULL AND mainzone != ''
-    ORDER BY mainzone, mlmatic_zone, region, area
+    ORDER BY mainzone, mlmatic_zone, region, mlmatic_area
 ";
 $hierarchy_res = mysqli_query($conn, $hierarchy_query);
 if ($hierarchy_res) {
@@ -211,21 +183,19 @@ if ($hierarchy_res) {
         $rg = trim((string)($h['region'] ?? ''));
         $ar = trim((string)($h['area'] ?? ''));
 
-        if ($mz !== '' && !in_array($mz, $distinct_mz, true)) $distinct_mz[] = $mz;
-        if ($zn !== '' && !in_array($zn, $distinct_zn, true)) $distinct_zn[] = $zn;
-        if ($rg !== '' && !in_array($rg, $distinct_reg, true)) $distinct_reg[] = $rg;
-        if ($ar !== '' && !in_array($ar, $distinct_area, true)) $distinct_area[] = $ar;
+        if ($mz !== '' && !in_array($mz, $distinct_mz, true))    $distinct_mz[] = $mz;
+        if ($zn !== '' && !in_array($zn, $distinct_zn, true))    $distinct_zn[] = $zn;
+        if ($rg !== '' && !in_array($rg, $distinct_reg, true))   $distinct_reg[] = $rg;
+        if ($ar !== '' && !in_array($ar, $distinct_area, true))  $distinct_area[] = $ar;
 
         if ($mz !== '' && $zn !== '') {
             $mz_to_zn[$mz] = $mz_to_zn[$mz] ?? [];
             if (!in_array($zn, $mz_to_zn[$mz], true)) $mz_to_zn[$mz][] = $zn;
         }
-        
         if ($mz !== '' && $rg !== '') {
             $mz_to_reg[$mz] = $mz_to_reg[$mz] ?? [];
             if (!in_array($rg, $mz_to_reg[$mz], true)) $mz_to_reg[$mz][] = $rg;
         }
-        
         if ($zn !== '' && $rg !== '') {
             $zn_to_reg[$zn] = $zn_to_reg[$zn] ?? [];
             if (!in_array($rg, $zn_to_reg[$zn], true)) $zn_to_reg[$zn][] = $rg;
@@ -241,7 +211,7 @@ sort($distinct_zn);
 sort($distinct_reg);
 sort($distinct_area);
 
-// Updated years query to use fs_raw_data_summary
+/* ---- Years (uses idx_transaction_year / idx_year_lookup) ---- */
 $years_query = "
     SELECT DISTINCT transaction_year
     FROM fs_reports.fs_raw_data_summary
@@ -256,15 +226,14 @@ if ($years_res) {
     }
 }
 
-// ============================================================
-// GET GL MAPPING based on GL Code Mode
-// ============================================================
+/* =====================================================================
+   GL MAPPING (with simple in-request cache)
+   ===================================================================== */
 $gl_mapping = [];
 $gl_descriptions = [];
 $sort_order_descriptions = [];
 $special_keys = [];
 
-// Build lookup maps if mixed mode is active
 $old_gl_id_to_codes = [];
 $mixed_id_map = [];
 if ($gl_code_mode === 'mixed') {
@@ -272,18 +241,17 @@ if ($gl_code_mode === 'mixed') {
     while ($row = mysqli_fetch_assoc($res)) {
         $old_gl_id_to_codes[$row['gl_id']][] = trim($row['gl_code']);
     }
-
     $mixed_id_map = [
-        'INS-1' => ['INS-28', 'INS-29', 'INS-30', 'INS-31', 'INS-34', 'INS-39'],
-        'INS-2' => ['INS-25', 'INS-26', 'INS-44', 'INS-47'],
-        'INS-3' => ['INS-32', 'INS-33', 'INS-42', 'INS-43', 'INS-45'],
-        'INS-4' => ['INS-27', 'INS-46'],
-        'INS-5' => ['INS-20', 'INS-21', 'INS-22', 'INS-23', 'INS-24', 'INS-37', 'INS-41'],
-        'INS-6' => ['INS-1', 'INS-2', 'INS-3', 'INS-4', 'INS-5', 'INS-6', 'INS-7', 'INS-8', 'INS-9', 'INS-10', 'INS-11', 'INS-12', 'INS-13', 'INS-14', 'INS-35', 'INS-36', 'INS-40'],
-        'INS-7' => ['INS-15', 'INS-16','INS-17','INS-18','INS-19'],
+        'INS-1'  => ['INS-28','INS-29','INS-30','INS-31','INS-34','INS-39'],
+        'INS-2'  => ['INS-25','INS-26','INS-44','INS-47'],
+        'INS-3'  => ['INS-32','INS-33','INS-42','INS-43','INS-45'],
+        'INS-4'  => ['INS-27','INS-46'],
+        'INS-5'  => ['INS-20','INS-21','INS-22','INS-23','INS-24','INS-37','INS-41'],
+        'INS-6'  => ['INS-1','INS-2','INS-3','INS-4','INS-5','INS-6','INS-7','INS-8','INS-9','INS-10','INS-11','INS-12','INS-13','INS-14','INS-35','INS-36','INS-40'],
+        'INS-7'  => ['INS-15','INS-16','INS-17','INS-18','INS-19'],
         'INS-10' => ['INS-38'],
         'INS-11' => ['INS-48'],
-        'INS-12' => ['INS-49']
+        'INS-12' => ['INS-49'],
     ];
 }
 
@@ -295,29 +263,24 @@ $gl_structure_query = "
     WHERE sort_order IS NOT NULL AND sub_order IS NOT NULL
     ORDER BY sort_order ASC, sub_order ASC
 ";
-
 $gl_structure_result = mysqli_query($conn, $gl_structure_query);
 if ($gl_structure_result) {
     while ($row = mysqli_fetch_assoc($gl_structure_result)) {
-        $key = $row['sort_order'] . '|' . $row['sub_order'];
+        $key   = $row['sort_order'] . '|' . $row['sub_order'];
         $gl_id = $row['gl_id'] ?? '';
 
-        if ($gl_id === 'INJ-2') {
-            $special_keys[] = $key;
-        }
+        if ($gl_id === 'INJ-2') $special_keys[] = $key;
 
         if (!isset($gl_mapping[$key])) {
             $gl_mapping[$key] = ['old' => [], 'new' => []];
             $gl_descriptions[$key] = $row['gl_description_comparative'] ?? '';
         }
-
         $code = trim((string)($row['gl_code'] ?? ''));
 
         if ($gl_code_mode === 'mixed') {
             if ($code !== '' && !in_array($code, $gl_mapping[$key]['new'], true)) {
                 $gl_mapping[$key]['new'][] = $code;
             }
-            
             $target_old_ids = $mixed_id_map[$gl_id] ?? [$gl_id];
             foreach ($target_old_ids as $oid) {
                 if (isset($old_gl_id_to_codes[$oid])) {
@@ -330,640 +293,490 @@ if ($gl_structure_result) {
             }
         } else {
             if ($code !== '') {
-                if (!in_array($code, $gl_mapping[$key]['old'], true)) {
-                    $gl_mapping[$key]['old'][] = $code;
-                }
-                if (!in_array($code, $gl_mapping[$key]['new'], true)) {
-                    $gl_mapping[$key]['new'][] = $code;
-                }
+                if (!in_array($code, $gl_mapping[$key]['old'], true)) $gl_mapping[$key]['old'][] = $code;
+                if (!in_array($code, $gl_mapping[$key]['new'], true)) $gl_mapping[$key]['new'][] = $code;
             }
         }
-        
+
         if (!isset($sort_order_descriptions[$row['sort_order']]) && !empty($row['description'])) {
             $sort_order_descriptions[$row['sort_order']] = $row['description'];
         }
     }
 }
 
-function compute_table_rows_for_region_area(mysqli $conn, string $mainzone, string $zone, string $transaction_year, string $primary_period, string $previous_period, string $gl_code_mode, array $gl_mapping, array $gl_descriptions, array $special_keys, array $sort_order_descriptions, string $region, string $area, array $selected_branches = [], bool $use_real_data = true): array {
-$where_conditions = [];
-$params = [];
-$types = "";
+/* =====================================================================
+   BATCH FETCH — ONE query per period instead of N×2
 
-if (!empty($mainzone)) {
-    $where_conditions[] = "mainzone = ?";
-    $params[] = $mainzone;
-    $types .= "s";
-}
-if (!empty($zone)) {
-    $where_conditions[] = "mlmatic_zone = ?";
-    $params[] = $zone;
-    $types .= "s";
-}
-if (!empty($region)) {
-    $where_conditions[] = "region = ?";
-    $params[] = $region;
-    $types .= "s";
-}
-if (!empty($area)) {
-    $where_conditions[] = "area = ?";
-    $params[] = $area;
-    $types .= "s";
-}
-if (!empty($selected_branches)) {
-    $branch_conditions = [];
-    foreach ($selected_branches as $branch) {
-        $branch_parts = explode('|', $branch);
-        if (count($branch_parts) == 2) {
-            $branch_id = trim($branch_parts[0]);
-            $branch_name = trim($branch_parts[1]);
-            $branch_conditions[] = "(branch_id = ? AND branch_name = ?)";
-            $params[] = $branch_id;
-            $params[] = $branch_name;
-            $types .= "ss";
+   Returns:
+     [ period_ym => [ "branchid|branchname" => [gl_code => ['mlfsi'=>..,'jewelers'=>..]], ... ] ]
+   Only used when branches are pre-selected (per-branch tables).
+
+   NOTE: mainzone / zone are intentionally NOT filtered here. The branch
+   list is already scoped by the UI, and adding these filters causes
+   false negatives when stored values don't match exactly (casing,
+   whitespace, stale data).
+   ===================================================================== */
+function fetch_period_data_by_branch(
+    mysqli $conn,
+    string $period_ym,
+    array $branch_keys,      // list of "id|name"
+    string $mainzone,
+    string $zone,
+    string $transaction_year
+): array {
+    if (empty($period_ym) || empty($branch_keys)) return [];
+
+    [$start, $end] = monthBounds($period_ym);
+
+    // Build IN (?, ?, ...) on (branch_id, branch_name) pairs
+    $pairPlaceholders = [];
+    $params = [];
+    $types  = '';
+    foreach ($branch_keys as $bk) {
+        $parts = explode('|', $bk);
+        if (count($parts) === 2) {
+            $pairPlaceholders[] = '(?, ?)';
+            $params[] = trim($parts[0]);
+            $params[] = trim($parts[1]);
+            $types .= 'ss';
         }
     }
-    if (!empty($branch_conditions)) {
-        $where_conditions[] = "(" . implode(" OR ", $branch_conditions) . ")";
+    if (empty($pairPlaceholders)) return [];
+
+    $where_extra = '';
+    if ($transaction_year !== '') {
+        $where_extra .= ' AND transaction_year = ?';
+        $params[] = $transaction_year; $types .= 's';
     }
-}
-if (!empty($transaction_year)) {
-    $where_conditions[] = "transaction_year = ?";
-    $params[] = $transaction_year;
-    $types .= "s";
-}
 
-$base_where = !empty($where_conditions) ? "WHERE " . implode(" AND ", $where_conditions) : "WHERE 1=1";
+    // Append period bounds last (so BETWEEN uses them)
+    $params[] = $start; $types .= 's';
+    $params[] = $end;   $types .= 's';
 
-$primary_data = [];
-if ($use_real_data && !empty($primary_period)) {
-    $p_parts = explode('-', $primary_period);
-    $p_year = $p_parts[0];
-    $p_month_val = $primary_period . '-01';
-    
-    $primary_sql = "
-        SELECT 
-            gl_code,
-            SUM(CASE WHEN transaction_type = 'Branch' THEN amount ELSE 0 END) as branch_amount,
-            SUM(CASE WHEN transaction_type = 'Showroom' THEN amount ELSE 0 END) as showroom_amount
+    $sql = "
+        SELECT branch_id, branch_name, gl_code,
+               SUM(CASE WHEN transaction_type = 'Branch'   THEN amount ELSE 0 END) AS branch_amount,
+               SUM(CASE WHEN transaction_type = 'Showroom' THEN amount ELSE 0 END) AS showroom_amount
         FROM fs_reports.fs_raw_data_summary
-        $base_where
-        AND transaction_year = ? AND transaction_month = ?
-        AND gl_code IS NOT NULL AND gl_code != ''
+        WHERE (branch_id, branch_name) IN (" . implode(',', $pairPlaceholders) . ")
+          AND transaction_month BETWEEN ? AND ?
+          AND gl_code IS NOT NULL AND gl_code != ''
+          {$where_extra}
+        GROUP BY branch_id, branch_name, gl_code
+    ";
+
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) return [];
+    mysqli_stmt_bind_param($stmt, $types, ...$params);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+
+    $out = [];
+    while ($row = mysqli_fetch_assoc($res)) {
+        $bk = $row['branch_id'] . '|' . $row['branch_name'];
+        $out[$bk][$row['gl_code']] = [
+            'mlfsi'    => floatval($row['branch_amount']),
+            'jewelers' => floatval($row['showroom_amount']),
+        ];
+    }
+    mysqli_stmt_close($stmt);
+    return $out;
+}
+
+/* =====================================================================
+   AGGREGATE one period for a single region/area combination
+   (fallback path — no branch pre-selected)
+
+   NOTE: mainzone / zone are intentionally NOT filtered here. region +
+   area already uniquely identify the scope, and adding mainzone/zone
+   causes false negatives due to stale/mismatched hierarchy labels.
+   ===================================================================== */
+function fetch_period_data_for_region_area(
+    mysqli $conn,
+    string $period_ym,
+    string $mainzone,
+    string $zone,
+    string $region,
+    string $area
+): array {
+    if (empty($period_ym)) return [];
+    [$start, $end] = monthBounds($period_ym);
+
+    $where = "WHERE transaction_month BETWEEN ? AND ? AND gl_code IS NOT NULL AND gl_code != ''";
+    $params = [$start, $end];
+    $types  = 'ss';
+
+    if ($region !== '')   { $where .= " AND region = ?";         $params[] = $region;   $types .= 's'; }
+    if ($area !== '')     { $where .= " AND mlmatic_area = ?";   $params[] = $area;     $types .= 's'; }
+
+    $sql = "
+        SELECT gl_code,
+               SUM(CASE WHEN transaction_type = 'Branch'   THEN amount ELSE 0 END) AS branch_amount,
+               SUM(CASE WHEN transaction_type = 'Showroom' THEN amount ELSE 0 END) AS showroom_amount
+        FROM fs_reports.fs_raw_data_summary
+        {$where}
         GROUP BY gl_code
     ";
-    $primary_params = array_merge($params, [$p_year, $p_month_val]);
-    $primary_types = $types . "ss";
-    
-    $primary_stmt = mysqli_prepare($conn, $primary_sql);
-    if ($primary_stmt) {
-        if (!empty($primary_params)) {
-            mysqli_stmt_bind_param($primary_stmt, $primary_types, ...$primary_params);
+
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) return [];
+    mysqli_stmt_bind_param($stmt, $types, ...$params);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+
+    $out = [];
+    while ($row = mysqli_fetch_assoc($res)) {
+        $out[$row['gl_code']] = [
+            'mlfsi'    => floatval($row['branch_amount']),
+            'jewelers' => floatval($row['showroom_amount']),
+        ];
+    }
+    mysqli_stmt_close($stmt);
+    return $out;
+}
+
+/* =====================================================================
+   BUILD TABLE ROWS from pre-fetched data
+   ===================================================================== */
+function build_table_rows(
+    array $gl_mapping,
+    array $gl_descriptions,
+    array $special_keys,
+    array $sort_order_descriptions,
+    array $primary_data,       // [gl_code => ['mlfsi'=>..,'jewelers'=>..]]
+    array $previous_data,
+    string $primary_period,
+    string $previous_period,
+    string $gl_code_mode
+): array {
+    $table_rows = [];
+
+    foreach ($gl_mapping as $key => $codes_detailed) {
+        [$sort_order, $sub_order] = explode('|', $key);
+        $gl_description = $gl_descriptions[$key] ?? '';
+        $is_inj2 = in_array($key, $special_keys);
+
+        if ($gl_code_mode === 'old') {
+            $p_codes = $codes_detailed['old'];
+            $prev_codes = $codes_detailed['old'];
+        } elseif ($gl_code_mode === 'new') {
+            $p_codes = $codes_detailed['new'];
+            $prev_codes = $codes_detailed['new'];
+        } else {
+            $p_mode    = isApril2026OrLater($primary_period)  ? 'new' : 'old';
+            $prev_mode = isApril2026OrLater($previous_period) ? 'new' : 'old';
+            $p_codes   = $codes_detailed[$p_mode];
+            $prev_codes = $codes_detailed[$prev_mode];
         }
-        mysqli_stmt_execute($primary_stmt);
-        $primary_result = mysqli_stmt_get_result($primary_stmt);
-        while ($row = mysqli_fetch_assoc($primary_result)) {
-            $primary_data[$row['gl_code']] = [
-                'mlfsi' => floatval($row['branch_amount']),
-                'jewelers' => floatval($row['showroom_amount']),
-                'total' => floatval($row['branch_amount']) + floatval($row['showroom_amount'])
+
+        $primary_mlfsi = $primary_jewelers = $previous_mlfsi = $previous_jewelers = 0;
+
+        foreach ($p_codes as $gl_code) {
+            if (isset($primary_data[$gl_code])) {
+                $primary_mlfsi    += $primary_data[$gl_code]['mlfsi'];
+                $primary_jewelers += $primary_data[$gl_code]['jewelers'];
+            }
+        }
+        foreach ($prev_codes as $gl_code) {
+            if (isset($previous_data[$gl_code])) {
+                $previous_mlfsi    += $previous_data[$gl_code]['mlfsi'];
+                $previous_jewelers += $previous_data[$gl_code]['jewelers'];
+            }
+        }
+
+        $table_rows[] = [
+            'sort_order'        => $sort_order,
+            'sub_order'         => $sub_order,
+            'gl_description'    => $gl_description,
+            'is_section_header' => false,
+            'is_summary_row'    => false,
+            'primary_mlfsi'     => $primary_mlfsi,
+            'primary_jewelers'  => $primary_jewelers,
+            'primary_total'     => $primary_mlfsi + $primary_jewelers,
+            'previous_mlfsi'    => $previous_mlfsi,
+            'previous_jewelers' => $previous_jewelers,
+            'previous_total'    => $previous_mlfsi + $previous_jewelers,
+            'is_inj2'           => $is_inj2,
+        ];
+    }
+
+    /* Group + compute summary rows exactly as before */
+    $grouped_rows = [];
+    foreach ($table_rows as $row) {
+        $grouped_rows[$row['sort_order']][] = $row;
+    }
+
+    $final_table_rows = [];
+    $rev_mlfsi_p = $rev_jew_p = $rev_tot_p = 0;
+    $rev_mlfsi_prev = $rev_jew_prev = $rev_tot_prev = 0;
+    $sa_mlfsi_p = $sa_jew_p = $sa_tot_p = 0;
+    $sa_mlfsi_prev = $sa_jew_prev = $sa_tot_prev = 0;
+    $gp_mlfsi_p = $gp_jew_p = $gp_tot_p = 0;
+    $gp_mlfsi_prev = $gp_jew_prev = $gp_tot_prev = 0;
+    $ebitda_mlfsi_p = $ebitda_jew_p = $ebitda_tot_p = 0;
+    $ebitda_mlfsi_prev = $ebitda_jew_prev = $ebitda_tot_prev = 0;
+    $ebit_mlfsi_p = $ebit_jew_p = $ebit_tot_p = 0;
+    $ebit_mlfsi_prev = $ebit_jew_prev = $ebit_tot_prev = 0;
+    $ebt_mlfsi_p = $ebt_jew_p = $ebt_tot_p = 0;
+    $ebt_mlfsi_prev = $ebt_jew_prev = $ebt_tot_prev = 0;
+    $net_mlfsi_p = $net_jew_p = $net_tot_p = 0;
+    $net_mlfsi_prev = $net_jew_prev = $net_tot_prev = 0;
+
+    foreach ($grouped_rows as $sort_order => $rows) {
+        if (!in_array((int)$sort_order, [6, 8, 11])) {
+            foreach ($rows as $row) $final_table_rows[] = $row;
+        }
+
+        $tp_mlfsi = array_sum(array_column($rows, 'primary_mlfsi'));
+        $tp_jew   = array_sum(array_column($rows, 'primary_jewelers'));
+        $tp_tot   = array_sum(array_column($rows, 'primary_total'));
+        $tv_mlfsi = array_sum(array_column($rows, 'previous_mlfsi'));
+        $tv_jew   = array_sum(array_column($rows, 'previous_jewelers'));
+        $tv_tot   = array_sum(array_column($rows, 'previous_total'));
+
+        if ((int)$sort_order >= 1 && (int)$sort_order <= 20) {
+            $rev_mlfsi_p += $tp_mlfsi; $rev_jew_p += $tp_jew; $rev_tot_p += $tp_tot;
+            $rev_mlfsi_prev += $tv_mlfsi; $rev_jew_prev += $tv_jew; $rev_tot_prev += $tv_tot;
+        }
+        if ((int)$sort_order == 22 || (int)$sort_order == 23) {
+            $sa_mlfsi_p += $tp_mlfsi; $sa_jew_p += $tp_jew; $sa_tot_p += $tp_tot;
+            $sa_mlfsi_prev += $tv_mlfsi; $sa_jew_prev += $tv_jew; $sa_tot_prev += $tv_tot;
+        }
+
+        $inc_dec = $tp_tot - $tv_tot;
+        $pct = ($tv_tot != 0) ? ($inc_dec / abs($tv_tot)) * 100 : ($tp_tot != 0 ? 100 : 0);
+
+        $description = $sort_order_descriptions[$sort_order] ?? ("Total for Sort Order " . $sort_order);
+
+        if (!in_array((int)$sort_order, [24, 25, 26])) {
+            $final_table_rows[] = [
+                'sort_order'        => $sort_order,
+                'sub_order'         => '',
+                'gl_description'    => $description,
+                'is_section_header' => false,
+                'is_summary_row'    => true,
+                'primary_mlfsi'     => $tp_mlfsi,
+                'primary_jewelers'  => $tp_jew,
+                'primary_total'     => $tp_tot,
+                'previous_mlfsi'    => $tv_mlfsi,
+                'previous_jewelers' => $tv_jew,
+                'previous_total'    => $tv_tot,
+                'inc_dec'           => $inc_dec,
+                'percentage'        => $pct,
             ];
         }
-        mysqli_stmt_close($primary_stmt);
-    }
-}
 
-$previous_data = [];
-if ($use_real_data && !empty($previous_period)) {
-    $prev_parts = explode('-', $previous_period);
-    $prev_year_val = $prev_parts[0];
-    $prev_month_val = $previous_period . '-01';
-    
-    $previous_sql = "
-        SELECT 
-            gl_code,
-            SUM(CASE WHEN transaction_type = 'Branch' THEN amount ELSE 0 END) as branch_amount,
-            SUM(CASE WHEN transaction_type = 'Showroom' THEN amount ELSE 0 END) as showroom_amount
-        FROM fs_reports.fs_raw_data_summary
-        $base_where
-        AND transaction_year = ? AND transaction_month = ?
-        AND gl_code IS NOT NULL AND gl_code != ''
-        GROUP BY gl_code
-    ";
-    $previous_params = array_merge($params, [$prev_year_val, $prev_month_val]);
-    $previous_types = $types . "ss";
-    
-    $previous_stmt = mysqli_prepare($conn, $previous_sql);
-    if ($previous_stmt) {
-        if (!empty($previous_params)) {
-            mysqli_stmt_bind_param($previous_stmt, $previous_types, ...$previous_params);
-        }
-        mysqli_stmt_execute($previous_stmt);
-        $previous_result = mysqli_stmt_get_result($previous_stmt);
-        while ($row = mysqli_fetch_assoc($previous_result)) {
-            $previous_data[$row['gl_code']] = [
-                'mlfsi' => floatval($row['branch_amount']),
-                'jewelers' => floatval($row['showroom_amount']),
-                'total' => floatval($row['branch_amount']) + floatval($row['showroom_amount'])
+        if ((int)$sort_order == 20) {
+            $inc_dec_rev = $rev_tot_p - $rev_tot_prev;
+            $pct_rev = ($rev_tot_prev != 0) ? ($inc_dec_rev / abs($rev_tot_prev)) * 100 : ($rev_tot_p != 0 ? 100 : 0);
+            $final_table_rows[] = [
+                'sort_order' => 'TOTAL REVENUES', 'sub_order' => '', 'gl_description' => '',
+                'is_section_header' => false, 'is_summary_row' => true,
+                'primary_mlfsi' => $rev_mlfsi_p, 'primary_jewelers' => $rev_jew_p, 'primary_total' => $rev_tot_p,
+                'previous_mlfsi' => $rev_mlfsi_prev, 'previous_jewelers' => $rev_jew_prev, 'previous_total' => $rev_tot_prev,
+                'inc_dec' => $inc_dec_rev, 'percentage' => $pct_rev,
+            ];
+            $final_table_rows[] = [
+                'sort_order' => '', 'sub_order' => 'Cost of Sales/Service', 'gl_description' => '',
+                'is_section_header' => true, 'is_summary_row' => true,
+                'primary_mlfsi' => null, 'primary_jewelers' => null, 'primary_total' => null,
+                'previous_mlfsi' => null, 'previous_jewelers' => null, 'previous_total' => null,
+                'inc_dec' => null, 'percentage' => null,
             ];
         }
-        mysqli_stmt_close($previous_stmt);
-    }
-}
 
-$table_rows = [];
+        if ((int)$sort_order == 21) {
+            $gp_mlfsi_p = $rev_mlfsi_p - $tp_mlfsi;
+            $gp_jew_p   = $rev_jew_p   - $tp_jew;
+            $gp_tot_p   = $rev_tot_p   - $tp_tot;
+            $gp_mlfsi_prev = $rev_mlfsi_prev - $tv_mlfsi;
+            $gp_jew_prev   = $rev_jew_prev   - $tv_jew;
+            $gp_tot_prev   = $rev_tot_prev   - $tv_tot;
+            $inc_dec_gp = $gp_tot_p - $gp_tot_prev;
+            $pct_gp = ($gp_tot_prev != 0) ? ($inc_dec_gp / abs($gp_tot_prev)) * 100 : ($gp_tot_p != 0 ? 100 : 0);
+            $final_table_rows[] = [
+                'sort_order' => 'GROSS PROFIT', 'sub_order' => '', 'gl_description' => '',
+                'is_section_header' => false, 'is_summary_row' => true,
+                'primary_mlfsi' => $gp_mlfsi_p, 'primary_jewelers' => $gp_jew_p, 'primary_total' => $gp_tot_p,
+                'previous_mlfsi' => $gp_mlfsi_prev, 'previous_jewelers' => $gp_jew_prev, 'previous_total' => $gp_tot_prev,
+                'inc_dec' => $inc_dec_gp, 'percentage' => $pct_gp,
+            ];
+            $final_table_rows[] = [
+                'sort_order' => 'SELLING & ADMIN EXPENSE', 'sub_order' => '', 'gl_description' => '',
+                'is_section_header' => true, 'is_summary_row' => true,
+                'primary_mlfsi' => null, 'primary_jewelers' => null, 'primary_total' => null,
+                'previous_mlfsi' => null, 'previous_jewelers' => null, 'previous_total' => null,
+                'inc_dec' => null, 'percentage' => null,
+            ];
+        }
 
-foreach ($gl_mapping as $key => $codes_detailed) {
-    [$sort_order, $sub_order] = explode('|', $key);
-    $gl_description = $gl_descriptions[$key] ?? '';
-    $is_inj2 = in_array($key, $special_keys);
-    
-    $p_codes = [];
-    $prev_codes = [];
-    
-    if ($gl_code_mode === 'old') {
-        $p_codes = $codes_detailed['old'];
-        $prev_codes = $codes_detailed['old'];
-    } elseif ($gl_code_mode === 'new') {
-        $p_codes = $codes_detailed['new'];
-        $prev_codes = $codes_detailed['new'];
-    } else {
-        $p_mode = isApril2026OrLater($primary_period) ? 'new' : 'old';
-        $prev_mode = isApril2026OrLater($previous_period) ? 'new' : 'old';
-        $p_codes = $codes_detailed[$p_mode];
-        $prev_codes = $codes_detailed[$prev_mode];
-    }
+        if ((int)$sort_order == 23) {
+            $inc_dec_sa = $sa_tot_p - $sa_tot_prev;
+            $pct_sa = ($sa_tot_prev != 0) ? ($inc_dec_sa / abs($sa_tot_prev)) * 100 : ($sa_tot_p != 0 ? 100 : 0);
+            $final_table_rows[] = [
+                'sort_order' => 'TOTAL SELLING AND ADMIN EXPENSES', 'sub_order' => '', 'gl_description' => '',
+                'is_section_header' => false, 'is_summary_row' => true,
+                'primary_mlfsi' => $sa_mlfsi_p, 'primary_jewelers' => $sa_jew_p, 'primary_total' => $sa_tot_p,
+                'previous_mlfsi' => $sa_mlfsi_prev, 'previous_jewelers' => $sa_jew_prev, 'previous_total' => $sa_tot_prev,
+                'inc_dec' => $inc_dec_sa, 'percentage' => $pct_sa,
+            ];
+            $ebitda_mlfsi_p = $gp_mlfsi_p - $sa_mlfsi_p;
+            $ebitda_jew_p   = $gp_jew_p   - $sa_jew_p;
+            $ebitda_tot_p   = $gp_tot_p   - $sa_tot_p;
+            $ebitda_mlfsi_prev = $gp_mlfsi_prev - $sa_mlfsi_prev;
+            $ebitda_jew_prev   = $gp_jew_prev   - $sa_jew_prev;
+            $ebitda_tot_prev   = $gp_tot_prev   - $sa_tot_prev;
+            $inc_dec_ebitda = $ebitda_tot_p - $ebitda_tot_prev;
+            $pct_ebitda = ($ebitda_tot_prev != 0) ? ($inc_dec_ebitda / abs($ebitda_tot_prev)) * 100 : ($ebitda_tot_p != 0 ? 100 : 0);
+            $final_table_rows[] = [
+                'sort_order' => "EARNINGS BEFORE INTEREST, TAXES, DEP'N, & AMORT", 'sub_order' => '', 'gl_description' => '',
+                'is_section_header' => false, 'is_summary_row' => true, 'skip_spacer' => true,
+                'primary_mlfsi' => $ebitda_mlfsi_p, 'primary_jewelers' => $ebitda_jew_p, 'primary_total' => $ebitda_tot_p,
+                'previous_mlfsi' => $ebitda_mlfsi_prev, 'previous_jewelers' => $ebitda_jew_prev, 'previous_total' => $ebitda_tot_prev,
+                'inc_dec' => $inc_dec_ebitda, 'percentage' => $pct_ebitda,
+            ];
+        }
 
-    $primary_mlfsi = 0;
-    $primary_jewelers = 0;
-    $previous_mlfsi = 0;
-    $previous_jewelers = 0;
-    
-    foreach ($p_codes as $gl_code) {
-        if (isset($primary_data[$gl_code])) {
-            $primary_mlfsi += $primary_data[$gl_code]['mlfsi'];
-            $primary_jewelers += $primary_data[$gl_code]['jewelers'];
+        if ((int)$sort_order == 24) {
+            $ebit_mlfsi_p = $ebitda_mlfsi_p - $tp_mlfsi;
+            $ebit_jew_p   = $ebitda_jew_p   - $tp_jew;
+            $ebit_tot_p   = $ebitda_tot_p   - $tp_tot;
+            $ebit_mlfsi_prev = $ebitda_mlfsi_prev - $tv_mlfsi;
+            $ebit_jew_prev   = $ebitda_jew_prev   - $tv_jew;
+            $ebit_tot_prev   = $ebitda_tot_prev   - $tv_tot;
+            $inc_dec_ebit = $ebit_tot_p - $ebit_tot_prev;
+            $pct_ebit = ($ebit_tot_prev != 0) ? ($inc_dec_ebit / abs($ebit_tot_prev)) * 100 : ($ebit_tot_p != 0 ? 100 : 0);
+            $final_table_rows[] = ['is_manual_spacer' => true];
+            $final_table_rows[] = [
+                'sort_order' => 'EARNINGS BEFORE INTEREST & TAXES', 'sub_order' => '', 'gl_description' => '',
+                'is_section_header' => false, 'is_summary_row' => true, 'skip_spacer' => true,
+                'primary_mlfsi' => $ebit_mlfsi_p, 'primary_jewelers' => $ebit_jew_p, 'primary_total' => $ebit_tot_p,
+                'previous_mlfsi' => $ebit_mlfsi_prev, 'previous_jewelers' => $ebit_jew_prev, 'previous_total' => $ebit_tot_prev,
+                'inc_dec' => $inc_dec_ebit, 'percentage' => $pct_ebit,
+            ];
+        }
+
+        if ((int)$sort_order == 25) {
+            $ebt_mlfsi_p = $ebit_mlfsi_p - $tp_mlfsi;
+            $ebt_jew_p   = $ebit_jew_p   - $tp_jew;
+            $ebt_tot_p   = $ebit_tot_p   - $tp_tot;
+            $ebt_mlfsi_prev = $ebit_mlfsi_prev - $tv_mlfsi;
+            $ebt_jew_prev   = $ebit_jew_prev   - $tv_jew;
+            $ebt_tot_prev   = $ebit_tot_prev   - $tv_tot;
+            $inc_dec_ebt = $ebt_tot_p - $ebt_tot_prev;
+            $pct_ebt = ($ebt_tot_prev != 0) ? ($inc_dec_ebt / abs($ebt_tot_prev)) * 100 : ($ebt_tot_p != 0 ? 100 : 0);
+            $final_table_rows[] = ['is_manual_spacer' => true];
+            $final_table_rows[] = [
+                'sort_order' => 'EARNINGS BEFORE TAXES', 'sub_order' => '', 'gl_description' => '',
+                'is_section_header' => false, 'is_summary_row' => true, 'skip_spacer' => true,
+                'primary_mlfsi' => $ebt_mlfsi_p, 'primary_jewelers' => $ebt_jew_p, 'primary_total' => $ebt_tot_p,
+                'previous_mlfsi' => $ebt_mlfsi_prev, 'previous_jewelers' => $ebt_jew_prev, 'previous_total' => $ebt_tot_prev,
+                'inc_dec' => $inc_dec_ebt, 'percentage' => $pct_ebt,
+            ];
+        }
+
+        if ((int)$sort_order == 26) {
+            $net_mlfsi_p = $ebt_mlfsi_p - $tp_mlfsi;
+            $net_jew_p   = $ebt_jew_p   - $tp_jew;
+            $net_tot_p   = $ebt_tot_p   - $tp_tot;
+            $net_mlfsi_prev = $ebt_mlfsi_prev - $tv_mlfsi;
+            $net_jew_prev   = $ebt_jew_prev   - $tv_jew;
+            $net_tot_prev   = $ebt_tot_prev   - $tv_tot;
+            $inc_dec_net = $net_tot_p - $net_tot_prev;
+            $pct_net = ($net_tot_prev != 0) ? ($inc_dec_net / abs($net_tot_prev)) * 100 : ($net_tot_p != 0 ? 100 : 0);
+            $final_table_rows[] = ['is_manual_spacer' => true];
+            $final_table_rows[] = [
+                'sort_order' => 'TOTAL NET INCOME/LOSS', 'sub_order' => '', 'gl_description' => '',
+                'is_section_header' => false, 'is_summary_row' => true, 'skip_spacer' => true,
+                'primary_mlfsi' => $net_mlfsi_p, 'primary_jewelers' => $net_jew_p, 'primary_total' => $net_tot_p,
+                'previous_mlfsi' => $net_mlfsi_prev, 'previous_jewelers' => $net_jew_prev, 'previous_total' => $net_tot_prev,
+                'inc_dec' => $inc_dec_net, 'percentage' => $pct_net,
+            ];
         }
     }
-    foreach ($prev_codes as $gl_code) {
-        if (isset($previous_data[$gl_code])) {
-            $previous_mlfsi += $previous_data[$gl_code]['mlfsi'];
-            $previous_jewelers += $previous_data[$gl_code]['jewelers'];
-        }
-    }
-    $primary_total = $primary_mlfsi + $primary_jewelers;
-    $previous_total = $previous_mlfsi + $previous_jewelers;
-    
-    $table_rows[] = [
-        'sort_order' => $sort_order,
-        'sub_order' => $sub_order,
-        'gl_description' => $gl_description,
-        'is_section_header' => false,
-        'is_summary_row' => false,
-        'primary_mlfsi' => $primary_mlfsi,
-        'primary_jewelers' => $primary_jewelers,
-        'primary_total' => $primary_total,
-        'previous_mlfsi' => $previous_mlfsi,
-        'previous_jewelers' => $previous_jewelers,
-        'previous_total' => $previous_total,
-        'is_inj2' => $is_inj2
-    ];
+
+    return $final_table_rows;
 }
 
-$grouped_rows = [];
-foreach ($table_rows as $row) {
-    $sort_order = $row['sort_order'];
-    if (!isset($grouped_rows[$sort_order])) {
-        $grouped_rows[$sort_order] = [];
-    }
-    $grouped_rows[$sort_order][] = $row;
-}
-
-$final_table_rows = [];
-$rev_mlfsi_p = 0; $rev_jew_p = 0; $rev_tot_p = 0;
-$rev_mlfsi_prev = 0; $rev_jew_prev = 0; $rev_tot_prev = 0;
-$sa_mlfsi_p = 0; $sa_jew_p = 0; $sa_tot_p = 0;
-$sa_mlfsi_prev = 0; $sa_jew_prev = 0; $sa_tot_prev = 0;
-$gp_mlfsi_p = 0; $gp_jew_p = 0; $gp_tot_p = 0;
-$gp_mlfsi_prev = 0; $gp_jew_prev = 0; $gp_tot_prev = 0;
-$ebitda_mlfsi_p = 0; $ebitda_jew_p = 0; $ebitda_tot_p = 0;
-$ebitda_mlfsi_prev = 0; $ebitda_jew_prev = 0; $ebitda_tot_prev = 0;
-$ebit_mlfsi_p = 0; $ebit_jew_p = 0; $ebit_tot_p = 0;
-$ebit_mlfsi_prev = 0; $ebit_jew_prev = 0; $ebit_tot_prev = 0;
-$ebt_mlfsi_p = 0; $ebt_jew_p = 0; $ebt_tot_p = 0;
-$ebt_mlfsi_prev = 0; $ebt_jew_prev = 0; $ebt_tot_prev = 0;
-$net_mlfsi_p = 0; $net_jew_p = 0; $net_tot_p = 0;
-$net_mlfsi_prev = 0; $net_jew_prev = 0; $net_tot_prev = 0;
-
-foreach ($grouped_rows as $sort_order => $rows) {
-    if (!in_array((int)$sort_order, [6, 8, 11])) {
-        foreach ($rows as $row) {
-            $final_table_rows[] = $row;
-        }
-    }
-    
-    $total_primary_mlfsi = array_sum(array_column($rows, 'primary_mlfsi'));
-    $total_primary_jewelers = array_sum(array_column($rows, 'primary_jewelers'));
-    $total_primary_total = array_sum(array_column($rows, 'primary_total'));
-    $total_previous_mlfsi = array_sum(array_column($rows, 'previous_mlfsi'));
-    $total_previous_jewelers = array_sum(array_column($rows, 'previous_jewelers'));
-    $total_previous_total = array_sum(array_column($rows, 'previous_total'));
-
-    if ((int)$sort_order >= 1 && (int)$sort_order <= 20) {
-        $rev_mlfsi_p += $total_primary_mlfsi;
-        $rev_jew_p += $total_primary_jewelers;
-        $rev_tot_p += $total_primary_total;
-        $rev_mlfsi_prev += $total_previous_mlfsi;
-        $rev_jew_prev += $total_previous_jewelers;
-        $rev_tot_prev += $total_previous_total;
-    }
-    
-    if ((int)$sort_order == 22 || (int)$sort_order == 23) {
-        $sa_mlfsi_p += $total_primary_mlfsi;
-        $sa_jew_p += $total_primary_jewelers;
-        $sa_tot_p += $total_primary_total;
-        $sa_mlfsi_prev += $total_previous_mlfsi;
-        $sa_jew_prev += $total_previous_jewelers;
-        $sa_tot_prev += $total_previous_total;
-    }
-    
-    $inc_dec = $total_primary_total - $total_previous_total;
-    $percentage = 0;
-    if ($total_previous_total != 0) {
-        $percentage = ($inc_dec / abs($total_previous_total)) * 100;
-    } elseif ($total_primary_total != 0) {
-        $percentage = 100;
-    }
-    
-    $description = isset($sort_order_descriptions[$sort_order]) 
-        ? $sort_order_descriptions[$sort_order] 
-        : "Total for Sort Order " . $sort_order;
-    
-    if (!in_array((int)$sort_order, [24, 25, 26])) {
-        $final_table_rows[] = [
-            'sort_order' => $sort_order,
-            'sub_order' => '',
-            'gl_description' => $description,
-            'is_section_header' => false,
-            'is_summary_row' => true,
-            'primary_mlfsi' => $total_primary_mlfsi,
-            'primary_jewelers' => $total_primary_jewelers,
-            'primary_total' => $total_primary_total,
-            'previous_mlfsi' => $total_previous_mlfsi,
-            'previous_jewelers' => $total_previous_jewelers,
-            'previous_total' => $total_previous_total,
-            'inc_dec' => $inc_dec,
-            'percentage' => $percentage
-        ];
-    }
-
-    if ((int)$sort_order == 20) {
-        $inc_dec_rev = $rev_tot_p - $rev_tot_prev;
-        $pct_rev = ($rev_tot_prev != 0) ? ($inc_dec_rev / abs($rev_tot_prev)) * 100 : ($rev_tot_p != 0 ? 100 : 0);
-
-        $final_table_rows[] = [
-            'sort_order' => 'TOTAL REVENUES',
-            'sub_order' => '',
-            'gl_description' => '',
-            'is_section_header' => false,
-            'is_summary_row' => true,
-            'primary_mlfsi' => $rev_mlfsi_p,
-            'primary_jewelers' => $rev_jew_p,
-            'primary_total' => $rev_tot_p,
-            'previous_mlfsi' => $rev_mlfsi_prev,
-            'previous_jewelers' => $rev_jew_prev,
-            'previous_total' => $rev_tot_prev,
-            'inc_dec' => $inc_dec_rev,
-            'percentage' => $pct_rev
-        ];
-
-        $final_table_rows[] = [
-            'sort_order' => '',
-            'sub_order' => 'Cost of Sales/Service',
-            'gl_description' => '',
-            'is_section_header' => true,
-            'is_summary_row' => true,
-            'primary_mlfsi' => null,
-            'primary_jewelers' => null,
-            'primary_total' => null,
-            'previous_mlfsi' => null,
-            'previous_jewelers' => null,
-            'previous_total' => null,
-            'inc_dec' => null,
-            'percentage' => null
-        ];
-    }
-
-    if ((int)$sort_order == 21) {
-        $gp_mlfsi_p = $rev_mlfsi_p - $total_primary_mlfsi;
-        $gp_jew_p = $rev_jew_p - $total_primary_jewelers;
-        $gp_tot_p = $rev_tot_p - $total_primary_total;
-        $gp_mlfsi_prev = $rev_mlfsi_prev - $total_previous_mlfsi;
-        $gp_jew_prev = $rev_jew_prev - $total_previous_jewelers;
-        $gp_tot_prev = $rev_tot_prev - $total_previous_total;
-        
-        $inc_dec_gp = $gp_tot_p - $gp_tot_prev;
-        $pct_gp = ($gp_tot_prev != 0) ? ($inc_dec_gp / abs($gp_tot_prev)) * 100 : ($gp_tot_p != 0 ? 100 : 0);
-
-        $final_table_rows[] = [
-            'sort_order' => 'GROSS PROFIT',
-            'sub_order' => '',
-            'gl_description' => '',
-            'is_section_header' => false,
-            'is_summary_row' => true,
-            'primary_mlfsi' => $gp_mlfsi_p,
-            'primary_jewelers' => $gp_jew_p,
-            'primary_total' => $gp_tot_p,
-            'previous_mlfsi' => $gp_mlfsi_prev,
-            'previous_jewelers' => $gp_jew_prev,
-            'previous_total' => $gp_tot_prev,
-            'inc_dec' => $inc_dec_gp,
-            'percentage' => $pct_gp
-        ];
-
-        $final_table_rows[] = [
-            'sort_order' => 'SELLING & ADMIN EXPENSE',
-            'sub_order' => '',
-            'gl_description' => '',
-            'is_section_header' => true,
-            'is_summary_row' => true,
-            'primary_mlfsi' => null,
-            'primary_jewelers' => null,
-            'primary_total' => null,
-            'previous_mlfsi' => null,
-            'previous_jewelers' => null,
-            'previous_total' => null,
-            'inc_dec' => null,
-            'percentage' => null
-        ];
-    }
-
-    if ((int)$sort_order == 23) {
-        $inc_dec_sa = $sa_tot_p - $sa_tot_prev;
-        $pct_sa = ($sa_tot_prev != 0) ? ($inc_dec_sa / abs($sa_tot_prev)) * 100 : ($sa_tot_p != 0 ? 100 : 0);
-
-        $final_table_rows[] = [
-            'sort_order' => 'TOTAL SELLING AND ADMIN EXPENSES',
-            'sub_order' => '',
-            'gl_description' => '',
-            'is_section_header' => false,
-            'is_summary_row' => true,
-            'primary_mlfsi' => $sa_mlfsi_p,
-            'primary_jewelers' => $sa_jew_p,
-            'primary_total' => $sa_tot_p,
-            'previous_mlfsi' => $sa_mlfsi_prev,
-            'previous_jewelers' => $sa_jew_prev,
-            'previous_total' => $sa_tot_prev,
-            'inc_dec' => $inc_dec_sa,
-            'percentage' => $pct_sa
-        ];
-
-        $ebitda_mlfsi_p = $gp_mlfsi_p - $sa_mlfsi_p;
-        $ebitda_jew_p = $gp_jew_p - $sa_jew_p;
-        $ebitda_tot_p = $gp_tot_p - $sa_tot_p;
-        $ebitda_mlfsi_prev = $gp_mlfsi_prev - $sa_mlfsi_prev;
-        $ebitda_jew_prev = $gp_jew_prev - $sa_jew_prev;
-        $ebitda_tot_prev = $gp_tot_prev - $sa_tot_prev;
-
-        $inc_dec_ebitda = $ebitda_tot_p - $ebitda_tot_prev;
-        $pct_ebitda = ($ebitda_tot_prev != 0) ? ($inc_dec_ebitda / abs($ebitda_tot_prev)) * 100 : ($ebitda_tot_p != 0 ? 100 : 0);
-
-        $final_table_rows[] = [
-            'sort_order' => "EARNINGS BEFORE INTEREST, TAXES, DEP'N, & AMORT",
-            'sub_order' => '',
-            'gl_description' => '',
-            'is_section_header' => false,
-            'is_summary_row' => true,
-            'skip_spacer' => true,
-            'primary_mlfsi' => $ebitda_mlfsi_p,
-            'primary_jewelers' => $ebitda_jew_p,
-            'primary_total' => $ebitda_tot_p,
-            'previous_mlfsi' => $ebitda_mlfsi_prev,
-            'previous_jewelers' => $ebitda_jew_prev,
-            'previous_total' => $ebitda_tot_prev,
-            'inc_dec' => $inc_dec_ebitda,
-            'percentage' => $pct_ebitda
-        ];
-    }
-
-    if ((int)$sort_order == 24) {
-        $ebit_mlfsi_p = $ebitda_mlfsi_p - $total_primary_mlfsi;
-        $ebit_jew_p = $ebitda_jew_p - $total_primary_jewelers;
-        $ebit_tot_p = $ebitda_tot_p - $total_primary_total;
-        $ebit_mlfsi_prev = $ebitda_mlfsi_prev - $total_previous_mlfsi;
-        $ebit_jew_prev = $ebitda_jew_prev - $total_previous_jewelers;
-        $ebit_tot_prev = $ebitda_tot_prev - $total_previous_total;
-
-        $inc_dec_ebit = $ebit_tot_p - $ebit_tot_prev;
-        $pct_ebit = ($ebit_tot_prev != 0) ? ($inc_dec_ebit / abs($ebit_tot_prev)) * 100 : ($ebit_tot_p != 0 ? 100 : 0);
-
-        $final_table_rows[] = ['is_manual_spacer' => true];
-
-        $final_table_rows[] = [
-            'sort_order' => 'EARNINGS BEFORE INTEREST & TAXES',
-            'sub_order' => '',
-            'gl_description' => '',
-            'is_section_header' => false,
-            'is_summary_row' => true,
-            'skip_spacer' => true,
-            'primary_mlfsi' => $ebit_mlfsi_p,
-            'primary_jewelers' => $ebit_jew_p,
-            'primary_total' => $ebit_tot_p,
-            'previous_mlfsi' => $ebit_mlfsi_prev,
-            'previous_jewelers' => $ebit_jew_prev,
-            'previous_total' => $ebit_tot_prev,
-            'inc_dec' => $inc_dec_ebit,
-            'percentage' => $pct_ebit
-        ];
-    }
-
-    if ((int)$sort_order == 25) {
-        $ebt_mlfsi_p = $ebit_mlfsi_p - $total_primary_mlfsi;
-        $ebt_jew_p = $ebit_jew_p - $total_primary_jewelers;
-        $ebt_tot_p = $ebit_tot_p - $total_primary_total;
-        $ebt_mlfsi_prev = $ebit_mlfsi_prev - $total_previous_mlfsi;
-        $ebt_jew_prev = $ebit_jew_prev - $total_previous_jewelers;
-        $ebt_tot_prev = $ebit_tot_prev - $total_previous_total;
-
-        $inc_dec_ebt = $ebt_tot_p - $ebt_tot_prev;
-        $pct_ebt = ($ebt_tot_prev != 0) ? ($inc_dec_ebt / abs($ebt_tot_prev)) * 100 : ($ebt_tot_p != 0 ? 100 : 0);
-
-        $final_table_rows[] = ['is_manual_spacer' => true];
-
-        $final_table_rows[] = [
-            'sort_order' => 'EARNINGS BEFORE TAXES',
-            'sub_order' => '',
-            'gl_description' => '',
-            'is_section_header' => false,
-            'is_summary_row' => true,
-            'skip_spacer' => true,
-            'primary_mlfsi' => $ebt_mlfsi_p,
-            'primary_jewelers' => $ebt_jew_p,
-            'primary_total' => $ebt_tot_p,
-            'previous_mlfsi' => $ebt_mlfsi_prev,
-            'previous_jewelers' => $ebt_jew_prev,
-            'previous_total' => $ebt_tot_prev,
-            'inc_dec' => $inc_dec_ebt,
-            'percentage' => $pct_ebt
-        ];
-    }
-
-    if ((int)$sort_order == 26) {
-        $net_mlfsi_p = $ebt_mlfsi_p - $total_primary_mlfsi;
-        $net_jew_p = $ebt_jew_p - $total_primary_jewelers;
-        $net_tot_p = $ebt_tot_p - $total_primary_total;
-        $net_mlfsi_prev = $ebt_mlfsi_prev - $total_previous_mlfsi;
-        $net_jew_prev = $ebt_jew_prev - $total_previous_jewelers;
-        $net_tot_prev = $ebt_tot_prev - $total_previous_total;
-
-        $inc_dec_net = $net_tot_p - $net_tot_prev;
-        $pct_net = ($net_tot_prev != 0) ? ($inc_dec_net / abs($net_tot_prev)) * 100 : ($net_tot_p != 0 ? 100 : 0);
-
-        $final_table_rows[] = ['is_manual_spacer' => true];
-
-        $final_table_rows[] = [
-            'sort_order' => 'TOTAL NET INCOME/LOSS',
-            'sub_order' => '',
-            'gl_description' => '',
-            'is_section_header' => false,
-            'is_summary_row' => true,
-            'skip_spacer' => true,
-            'primary_mlfsi' => $net_mlfsi_p,
-            'primary_jewelers' => $net_jew_p,
-            'primary_total' => $net_tot_p,
-            'previous_mlfsi' => $net_mlfsi_prev,
-            'previous_jewelers' => $net_jew_prev,
-            'previous_total' => $net_tot_prev,
-            'inc_dec' => $inc_dec_net,
-            'percentage' => $pct_net
-        ];
-    }
-}
-
-return $final_table_rows;
-}
-
-// ============================================================
-// BUILD TABLE(S) FOR SELECTED REGION/AREA COMBINATIONS OR BRANCHES
-// ============================================================
+/* =====================================================================
+   BUILD TABLES
+   ===================================================================== */
 $tables_by_region = [];
 
-// FIXED: If branches are selected, create a separate table for EACH branch
 if (!empty($selected_branches)) {
-    // Create a separate table for each selected branch
+    /* ---------- BRANCH MODE: batch fetch once per period ---------- */
+    $primary_branch_data  = $valid_filters ? fetch_period_data_by_branch(
+        $conn, $primary_period, $selected_branches, $mainzone, $zone, $transaction_year
+    ) : [];
+    $previous_branch_data = $valid_filters ? fetch_period_data_by_branch(
+        $conn, $previous_period, $selected_branches, $mainzone, $zone, $transaction_year
+    ) : [];
+
     foreach ($selected_branches as $branch_key) {
-        if (isset($branch_info[$branch_key])) {
-            $info = $branch_info[$branch_key];
-            $region = $info['region'] ?: 'Unknown Region';
-            $area = $info['area'] ?: 'Unknown Area';
-            $branch_name = $info['name'];
-            $branch_id = $info['id'];
-            
-            // Initialize region array if not exists
-            if (!isset($tables_by_region[$region])) {
-                $tables_by_region[$region] = [];
-            }
-            
-            // Add a separate table entry for this branch
-            $tables_by_region[$region][] = [
-                'area' => $area,
-                'branches' => [$branch_key], // Single branch only
-                'branch_names' => [$branch_name],
-                'branch_id' => $branch_id,
-                'is_individual_branch' => true, // Flag to indicate individual branch table
-                'rows' => compute_table_rows_for_region_area(
-                    $conn,
-                    $mainzone,
-                    $zone,
-                    $transaction_year,
-                    $primary_period,
-                    $previous_period,
-                    $gl_code_mode,
-                    $gl_mapping,
-                    $gl_descriptions,
-                    $special_keys,
-                    $sort_order_descriptions,
-                    $region,
-                    $area,
-                    [$branch_key], // Pass single branch
-                    $valid_filters
-                ),
-            ];
-        }
+        if (!isset($branch_info[$branch_key])) continue;
+        $info = $branch_info[$branch_key];
+        $region = $info['region'] ?: 'Unknown Region';
+        $area   = $info['area']   ?: 'Unknown Area';
+
+        $primary_data  = $primary_branch_data[$branch_key]  ?? [];
+        $previous_data = $previous_branch_data[$branch_key] ?? [];
+
+        $tables_by_region[$region][] = [
+            'area'                  => $area,
+            'branches'              => [$branch_key],
+            'branch_names'          => [$info['name']],
+            'branch_id'             => $info['id'],
+            'is_individual_branch'  => true,
+            'rows' => build_table_rows(
+                $gl_mapping, $gl_descriptions, $special_keys, $sort_order_descriptions,
+                $primary_data, $previous_data,
+                $primary_period, $previous_period, $gl_code_mode
+            ),
+        ];
     }
 } else {
-    // Original logic when no branches are selected
+    /* ---------- REGION / AREA MODE ---------- */
     if (!empty($selected_regions)) {
+        // Pre-fetch both periods once per (region, area) pair
         foreach ($selected_regions as $rg) {
             $allowed_areas = $reg_to_area[$rg] ?? [];
             $areas_for_region = [];
-
             if (!empty($selected_areas)) {
                 foreach ($selected_areas as $ar) {
-                    if (in_array($ar, $allowed_areas, true)) {
-                        $areas_for_region[] = $ar;
-                    }
+                    if (in_array($ar, $allowed_areas, true)) $areas_for_region[] = $ar;
                 }
             }
-
-            if (empty($areas_for_region)) {
-                $areas_for_region = [''];
-            }
+            if (empty($areas_for_region)) $areas_for_region = [''];
 
             foreach ($areas_for_region as $ar) {
-                $tables_by_region[$rg] = $tables_by_region[$rg] ?? [];
+                $primary_data  = $valid_filters ? fetch_period_data_for_region_area($conn, $primary_period,  $mainzone, $zone, $rg, $ar) : [];
+                $previous_data = $valid_filters ? fetch_period_data_for_region_area($conn, $previous_period, $mainzone, $zone, $rg, $ar) : [];
+
                 $tables_by_region[$rg][] = [
-                    'area' => $ar,
-                    'branches' => [],
-                    'branch_names' => [],
+                    'area' => $ar, 'branches' => [], 'branch_names' => [],
                     'is_individual_branch' => false,
-                    'rows' => compute_table_rows_for_region_area(
-                        $conn,
-                        $mainzone,
-                        $zone,
-                        $transaction_year,
-                        $primary_period,
-                        $previous_period,
-                        $gl_code_mode,
-                        $gl_mapping,
-                        $gl_descriptions,
-                        $special_keys,
-                        $sort_order_descriptions,
-                        $rg,
-                        $ar,
-                        [],
-                        $valid_filters
+                    'rows' => build_table_rows(
+                        $gl_mapping, $gl_descriptions, $special_keys, $sort_order_descriptions,
+                        $primary_data, $previous_data,
+                        $primary_period, $previous_period, $gl_code_mode
                     ),
                 ];
             }
         }
     } else {
+        $primary_data  = $valid_filters ? fetch_period_data_for_region_area($conn, $primary_period,  $mainzone, $zone, '', '') : [];
+        $previous_data = $valid_filters ? fetch_period_data_for_region_area($conn, $previous_period, $mainzone, $zone, '', '') : [];
         $tables_by_region[''] = [[
-            'area' => '',
-            'branches' => [],
-            'branch_names' => [],
+            'area' => '', 'branches' => [], 'branch_names' => [],
             'is_individual_branch' => false,
-            'rows' => compute_table_rows_for_region_area(
-                $conn,
-                $mainzone,
-                $zone,
-                $transaction_year,
-                $primary_period,
-                $previous_period,
-                $gl_code_mode,
-                $gl_mapping,
-                $gl_descriptions,
-                $special_keys,
-                $sort_order_descriptions,
-                '',
-                '',
-                [],
-                $valid_filters
+            'rows' => build_table_rows(
+                $gl_mapping, $gl_descriptions, $special_keys, $sort_order_descriptions,
+                $primary_data, $previous_data,
+                $primary_period, $previous_period, $gl_code_mode
             ),
         ]];
     }
 }
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -987,7 +800,7 @@ if (!empty($selected_branches)) {
         </header>
 
         <div class="content-wrapper">
-            <div class="page-title">Comparative Report (No Manual Adjustment) - Raw Data</div>
+            <div class="page-title">Comparative Report (No Manual Adjustment) - Raw Data from Per Zone</div>
 
             <?php if ($show_error && !empty($error_message)): ?>
                 <div class="error-banner">
@@ -1094,13 +907,9 @@ if (!empty($selected_branches)) {
                                     $display_area = $t['area'];
                                     $branch_names = $t['branch_names'] ?? [];
                                     $is_individual_branch = $t['is_individual_branch'] ?? false;
-                                    
-                                    // Build display text
-                                    if ($is_individual_branch && !empty($branch_names)) {
-                                        $branch_display = ' - Branch: ' . htmlspecialchars($branch_names[0]);
-                                    } else {
-                                        $branch_display = !empty($branch_names) ? ' (Branches: ' . implode(', ', array_map('htmlspecialchars', $branch_names)) . ')' : '';
-                                    }
+                                    $branch_display = ($is_individual_branch && !empty($branch_names))
+                                        ? ' - Branch: ' . htmlspecialchars($branch_names[0])
+                                        : (!empty($branch_names) ? ' (Branches: ' . implode(', ', array_map('htmlspecialchars', $branch_names)) . ')' : '');
                                 ?>
                                 <div class="table-container">
                                     <table class="data-table">
@@ -1109,16 +918,6 @@ if (!empty($selected_branches)) {
                                                 <th colspan="4">Region: <?php echo !empty($display_region) ? htmlspecialchars($display_region) : 'All Regions'; ?><?= $branch_display ?></th>
                                                 <th colspan="11">Area: <?php echo !empty($display_area) ? htmlspecialchars($display_area) : 'All Areas'; ?></th>
                                             </tr>
-                                            <?php if ($is_individual_branch && !empty($branch_names)): ?>
-                                            <tr>
-                                                <!-- <th colspan="15" style="background-color: #f0f7ff; color: #1a56db; font-weight: bold; text-align: center;">
-                                                    Branch: <?php echo htmlspecialchars($branch_names[0]); ?>
-                                                    <?php if (isset($t['branch_id'])): ?>
-                                                        (ID: <?php echo htmlspecialchars($t['branch_id']); ?>)
-                                                    <?php endif; ?>
-                                                </th> -->
-                                            </tr>
-                                            <?php endif; ?>
                                             <tr>
                                                 <th colspan="4"></th>
                                                 <th colspan="3"><?php echo !empty($primary_period) ? strtoupper(date('F Y', strtotime($primary_period . '-01'))) : '(Primary Period)'; ?></th>
@@ -1127,52 +926,40 @@ if (!empty($selected_branches)) {
                                                 <th colspan="4"></th>
                                             </tr>
                                             <tr>
+                                                <th></th><th></th><th></th><th></th>
+                                                <th>MLFSI</th><th>JEWELERS</th><th>TOTAL</th>
                                                 <th></th>
+                                                <th>MLFSI</th><th>JEWELERS</th><th>TOTAL</th>
                                                 <th></th>
-                                                <th></th>
-                                                <th></th>
-                                                <th>MLFSI</th>
-                                                <th>JEWELERS</th>
-                                                <th>TOTAL</th>
-                                                <th></th>
-                                                <th>MLFSI</th>
-                                                <th>JEWELERS</th>
-                                                <th>TOTAL</th>
-                                                <th></th>  
-                                                <th>Inc./Dec.</th>  
+                                                <th>Inc./Dec.</th>
                                                 <th>%</th>
-                                                <th></th>  
+                                                <th></th>
                                             </tr>
                                         </thead>
                                         <tbody class="report-tbody">
-
-                                        <tr class="initial-spacer">
-                                            <td colspan="15"></td>
-                                        </tr>
+                                        <tr class="initial-spacer"><td colspan="15"></td></tr>
                                         <tr class="revenues-header-row">
                                             <td style="background-color: #ff7f29; font-weight: bold;">REVENUES</td>
                                             <td colspan="14" style="background-color: #ff7f29; font-weight: bold;"></td>
                                         </tr>
                                             <?php if (empty($table_rows)): ?>
-                                                <tr>
-                                                    <td colspan="15" style="text-align: center;">No data structure available</td>
-                                                </tr>
+                                                <tr><td colspan="15" style="text-align: center;">No data structure available</td></tr>
                                             <?php else: ?>
-                                                <?php foreach ($table_rows as $row): 
+                                                <?php foreach ($table_rows as $row):
                                                     if (isset($row['is_manual_spacer']) && $row['is_manual_spacer']) {
                                                         echo '<tr class="spacer-row" style="height: 20px;"><td colspan="15"></td></tr>';
                                                         continue;
                                                     }
                                                     $is_summary_row = isset($row['is_summary_row']) && $row['is_summary_row'] === true;
                                                     $is_header = !empty($row['is_section_header']);
-                                                    
+
                                                     $primary_mlfsi = $row['primary_mlfsi'] ?? 0;
                                                     $primary_jewelers = $row['primary_jewelers'] ?? 0;
                                                     $primary_total = $row['primary_total'] ?? 0;
                                                     $previous_mlfsi = $row['previous_mlfsi'] ?? 0;
                                                     $previous_jewelers = $row['previous_jewelers'] ?? 0;
                                                     $previous_total = $row['previous_total'] ?? 0;
-                                                    
+
                                                     if (!$is_summary_row && !empty($row['is_inj2'])) {
                                                         $primary_mlfsi = -$primary_mlfsi;
                                                         $primary_jewelers = -$primary_jewelers;
@@ -1181,23 +968,16 @@ if (!empty($selected_branches)) {
                                                         $previous_jewelers = -$previous_jewelers;
                                                         $previous_total = -$previous_total;
                                                     }
-                                                    
-                                                    $inc_dec = isset($row['inc_dec']) ? $row['inc_dec'] : ($primary_total - $previous_total);
-                                                    
-                                                    if (isset($row['percentage'])) {
-                                                        $percentage = $row['percentage'];
-                                                    } else {
-                                                        $percentage = ($previous_total != 0) ? ($inc_dec / abs($previous_total)) * 100 : (($primary_total != 0) ? 100 : 0);
-                                                    }
-                                                    
+
+                                                    $inc_dec = $row['inc_dec'] ?? ($primary_total - $previous_total);
+                                                    $percentage = $row['percentage'] ?? (($previous_total != 0) ? ($inc_dec / abs($previous_total)) * 100 : (($primary_total != 0) ? 100 : 0));
+
                                                     $inc_dec_class = $inc_dec > 0 ? 'positive' : (($inc_dec < 0) ? 'negative' : '');
                                                     $percentage_class = $percentage > 0 ? 'positive' : ($percentage < 0 ? 'negative' : '');
                                                 ?>
                                                     <tr class="<?= $is_summary_row ? 'summary-row' : 'data-row' ?>"
                                                         data-sort-order="<?= htmlspecialchars($row['sort_order'] ?? '') ?>"
-                                                        <?php if (!$is_summary_row): ?>
-                                                            data-is-detail="true"
-                                                        <?php endif; ?>>
+                                                        <?php if (!$is_summary_row): ?> data-is-detail="true" <?php endif; ?>>
                                                         <td class="<?= $is_summary_row ? 'summary-cell' : '' ?>"><?= $is_summary_row ? htmlspecialchars($row['sort_order']) : '' ?></td>
                                                         <td class="<?= $is_summary_row ? 'summary-cell' : '' ?>">
                                                             <?php if ($is_header): ?><strong><?= htmlspecialchars($row['sub_order']) ?></strong>
@@ -1206,7 +986,7 @@ if (!empty($selected_branches)) {
                                                         </td>
                                                         <td class="<?= $is_summary_row ? 'summary-cell summary-description' : '' ?>"><?= !$is_summary_row ? htmlspecialchars($row['gl_description']) : '' ?></td>
                                                         <td class="<?= $is_summary_row ? 'summary-cell' : '' ?>"></td>
-                                                        
+
                                                         <td class="numeric-cell <?= $is_summary_row ? 'summary-cell' : '' ?>" style="<?= ($primary_mlfsi < 0) ? 'color: red;' : '' ?>">
                                                             <?= $is_header ? '' : (($is_summary_row ? '<strong>' : '') . number_format($primary_mlfsi, 2) . ($is_summary_row ? '</strong>' : '')) ?>
                                                         </td>
@@ -1217,7 +997,7 @@ if (!empty($selected_branches)) {
                                                             <?= $is_header ? '' : (($is_summary_row ? '<strong>' : '') . number_format($primary_total, 2) . ($is_summary_row ? '</strong>' : '')) ?>
                                                         </td>
                                                         <td class="<?= $is_summary_row ? 'summary-cell' : '' ?>"></td>
-                                                        
+
                                                         <td class="numeric-cell <?= $is_summary_row ? 'summary-cell' : '' ?>" style="<?= ($previous_mlfsi < 0) ? 'color: red;' : '' ?>">
                                                             <?= $is_header ? '' : (($is_summary_row ? '<strong>' : '') . number_format($previous_mlfsi, 2) . ($is_summary_row ? '</strong>' : '')) ?>
                                                         </td>
@@ -1228,26 +1008,20 @@ if (!empty($selected_branches)) {
                                                             <?= $is_header ? '' : (($is_summary_row ? '<strong>' : '') . number_format($previous_total, 2) . ($is_summary_row ? '</strong>' : '')) ?>
                                                         </td>
                                                         <td class="<?= $is_summary_row ? 'summary-cell' : '' ?>"></td>
-                                                        
+
                                                         <td class="numeric-cell <?= $inc_dec_class ?> <?= $is_summary_row ? 'summary-cell' : '' ?>" style="<?= ($inc_dec < 0) ? 'color: red;' : '' ?>">
                                                             <?= $is_header ? '' : number_format($inc_dec, 2) ?>
                                                         </td>
                                                         <td class="percentage-cell <?= $percentage_class ?> <?= $is_summary_row ? 'summary-cell' : '' ?>" style="<?= $percentage < 0 ? 'color: red;' : '' ?>">
-                                                            <?php 
-                                                                if ($is_header) {
-                                                                    echo '';
-                                                                } elseif ($percentage >= 1000 || $percentage <= -1000) {
-                                                                    echo 'mat';
-                                                                } else {
-                                                                    echo number_format($percentage, 2) . '%';
-                                                                }
+                                                            <?php
+                                                                if ($is_header) { echo ''; }
+                                                                elseif ($percentage >= 1000 || $percentage <= -1000) { echo 'mat'; }
+                                                                else { echo number_format($percentage, 2) . '%'; }
                                                             ?>
                                                         </td>
                                                         <td class="<?= $is_summary_row ? 'summary-cell' : '' ?>"></td>
                                                     </tr>
-                                                    <?php 
-                                                    if ($is_summary_row && !$is_header && empty($row['skip_spacer'])): 
-                                                    ?>
+                                                    <?php if ($is_summary_row && !$is_header && empty($row['skip_spacer'])): ?>
                                                         <tr class="spacer-row" data-spacer-for="<?= htmlspecialchars($row['sort_order'] ?? '') ?>" style="height: 20px;"><td colspan="15"></td></tr>
                                                     <?php endif; ?>
                                                 <?php endforeach; ?>
@@ -1266,59 +1040,31 @@ if (!empty($selected_branches)) {
                     if (!month1 || !month2) return 0;
                     return new Date(month1 + '-01') - new Date(month2 + '-01');
                 }
-
                 function isMarch2026OrEarlier(month) {
                     if (!month) return true;
-                    const cutoff = new Date('2026-03-01');
-                    const monthDate = new Date(month + '-01');
-                    return monthDate <= cutoff;
+                    return new Date(month + '-01') <= new Date('2026-03-01');
                 }
-
                 function isApril2026OrLater(month) {
                     if (!month) return true;
-                    const cutoff = new Date('2026-04-01');
-                    const monthDate = new Date(month + '-01');
-                    return monthDate >= cutoff;
+                    return new Date(month + '-01') >= new Date('2026-04-01');
                 }
 
                 let activeModal = null;
-
                 function showModal(message) {
-                    if (activeModal) {
-                        activeModal.remove();
-                    }
-                    
+                    if (activeModal) activeModal.remove();
                     const modalOverlay = document.createElement('div');
                     modalOverlay.className = 'modal-overlay';
                     modalOverlay.innerHTML = `
                         <div class="modal-container">
-                            <div class="modal-header">
-                                <h3><i class="fa-solid fa-triangle-exclamation"></i> Validation Error</h3>
-                            </div>
-                            <div class="modal-body">
-                                <p>${escapeHtml(message)}</p>
-                            </div>
-                            <div class="modal-footer">
-                                <button onclick="closeModal()">OK</button>
-                            </div>
-                        </div>
-                    `;
+                            <div class="modal-header"><h3><i class="fa-solid fa-triangle-exclamation"></i> Validation Error</h3></div>
+                            <div class="modal-body"><p>${escapeHtml(message)}</p></div>
+                            <div class="modal-footer"><button onclick="closeModal()">OK</button></div>
+                        </div>`;
                     document.body.appendChild(modalOverlay);
                     activeModal = modalOverlay;
                 }
-
-                window.closeModal = function() {
-                    if (activeModal) {
-                        activeModal.remove();
-                        activeModal = null;
-                    }
-                };
-
-                function escapeHtml(text) {
-                    const div = document.createElement('div');
-                    div.textContent = text;
-                    return div.innerHTML;
-                }
+                window.closeModal = function() { if (activeModal) { activeModal.remove(); activeModal = null; } };
+                function escapeHtml(text) { const d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
 
                 function validateForm() {
                     const primaryPeriod = document.getElementById('primaryPeriodSelect').value;
@@ -1328,91 +1074,57 @@ if (!empty($selected_branches)) {
                     const glMixedRadio = document.getElementById('glMixedRadio');
                     const glCodeMode = glOldRadio.checked ? 'old' : (glNewRadio.checked ? 'new' : (glMixedRadio.checked ? 'mixed' : 'old'));
 
-                    if (!primaryPeriod || !previousPeriod) {
-                        return true;
-                    }
-
+                    if (!primaryPeriod || !previousPeriod) return true;
                     if (compareMonths(primaryPeriod, previousPeriod) <= 0) {
-                        showModal('Primary period must be later than the Previous period.');
-                        return false;
+                        showModal('Primary period must be later than the Previous period.'); return false;
                     }
-
                     if (glCodeMode === 'old') {
                         if (!isMarch2026OrEarlier(primaryPeriod) || !isMarch2026OrEarlier(previousPeriod)) {
-                            showModal('Old GL Code is only available for March 2026 and earlier. Both selected periods must be March 2026 or earlier.');
-                            return false;
+                            showModal('Old GL Code is only available for March 2026 and earlier. Both selected periods must be March 2026 or earlier.'); return false;
                         }
                     } else if (glCodeMode === 'new') {
                         if (!isApril2026OrLater(primaryPeriod) || !isApril2026OrLater(previousPeriod)) {
-                            showModal('New GL Code is only available for April 2026 onwards. Both selected periods must be April 2026 or later.');
-                            return false;
+                            showModal('New GL Code is only available for April 2026 onwards. Both selected periods must be April 2026 or later.'); return false;
                         }
                     } else if (glCodeMode === 'mixed') {
-                        // Mixed mode: one period must be March 2026 or earlier, the other April 2026 or later
                         const primaryIsOld = isMarch2026OrEarlier(primaryPeriod);
                         const primaryIsNew = isApril2026OrLater(primaryPeriod);
                         const previousIsOld = isMarch2026OrEarlier(previousPeriod);
                         const previousIsNew = isApril2026OrLater(previousPeriod);
-
-                        // Check for overlap
-                        const hasOverlap = (primaryIsOld && previousIsNew) || (primaryIsNew && previousIsOld);
-
-                        if (!hasOverlap) {
-                            showModal('Mix GL Code is only available when the Primary and Previous periods overlap the old/new GL cutoff. One period must be March 2026 or earlier and the other must be April 2026 or later.');
-                            return false;
+                        if (!((primaryIsOld && previousIsNew) || (primaryIsNew && previousIsOld))) {
+                            showModal('Mix GL Code is only available when the Primary and Previous periods overlap the old/new GL cutoff. One period must be March 2026 or earlier and the other must be April 2026 or later.'); return false;
                         }
                     }
-
                     return true;
                 }
 
                 document.addEventListener('DOMContentLoaded', function() {
                     const collapseBtn = document.getElementById('collapseBtn');
                     let isCollapsed = false;
-
-                    if (collapseBtn) {
-                        collapseBtn.addEventListener('click', function() {
-                            isCollapsed = !isCollapsed;
-                            
-                            const tbodies = document.querySelectorAll('.report-tbody');
-                            tbodies.forEach(tbody => {
-                                const rows = Array.from(tbody.rows);
-                                rows.forEach(row => {
-                                    const sortOrder = row.getAttribute('data-sort-order');
-                                    const isDetail = row.getAttribute('data-is-detail') === 'true';
-                                    const spacerFor = row.getAttribute('data-spacer-for');
-                                    
-                                    const sortNum = parseInt(sortOrder);
-                                    const is1To20 = !isNaN(sortNum) && sortNum >= 1 && sortNum <= 20;
-                                    
-                                    if (is1To20 && isDetail) {
-                                        row.style.display = isCollapsed ? 'none' : '';
-                                    }
-                                    
-                                    if (spacerFor) {
-                                        const spacerNum = parseInt(spacerFor);
-                                        if (!isNaN(spacerNum) && spacerNum >= 1 && spacerNum <= 20) {
-                                            row.style.display = isCollapsed ? 'none' : '';
-                                        }
-                                    }
-
-                                    if (row.classList.contains('revenues-header-row')) {
-                                        row.style.display = isCollapsed ? 'none' : '';
-                                    }
-
-                                    if (row.classList.contains('initial-spacer')) {
-                                        row.style.display = isCollapsed ? 'none' : '';
-                                    }
-                                });
+                    if (!collapseBtn) return;
+                    collapseBtn.addEventListener('click', function() {
+                        isCollapsed = !isCollapsed;
+                        document.querySelectorAll('.report-tbody').forEach(tbody => {
+                            Array.from(tbody.rows).forEach(row => {
+                                const sortOrder = row.getAttribute('data-sort-order');
+                                const isDetail = row.getAttribute('data-is-detail') === 'true';
+                                const spacerFor = row.getAttribute('data-spacer-for');
+                                const sortNum = parseInt(sortOrder);
+                                const is1To20 = !isNaN(sortNum) && sortNum >= 1 && sortNum <= 20;
+                                if (is1To20 && isDetail) row.style.display = isCollapsed ? 'none' : '';
+                                if (spacerFor) {
+                                    const s = parseInt(spacerFor);
+                                    if (!isNaN(s) && s >= 1 && s <= 20) row.style.display = isCollapsed ? 'none' : '';
+                                }
+                                if (row.classList.contains('revenues-header-row')) row.style.display = isCollapsed ? 'none' : '';
+                                if (row.classList.contains('initial-spacer')) row.style.display = isCollapsed ? 'none' : '';
                             });
-
-                            collapseBtn.innerHTML = isCollapsed 
-                                ? '<i class="fa-solid fa-expand"></i> Uncollapse' 
-                                : '<i class="fa-solid fa-compress"></i> Collapse';
-                            
-                            collapseBtn.style.backgroundColor = isCollapsed ? '#1f2937' : '#4b5563';
                         });
-                    }
+                        collapseBtn.innerHTML = isCollapsed
+                            ? '<i class="fa-solid fa-expand"></i> Uncollapse'
+                            : '<i class="fa-solid fa-compress"></i> Collapse';
+                        collapseBtn.style.backgroundColor = isCollapsed ? '#1f2937' : '#4b5563';
+                    });
                 });
 
                 (function () {
@@ -1427,6 +1139,7 @@ if (!empty($selected_branches)) {
                     const selectedRegions = <?= json_encode(array_values($selected_regions)) ?>;
                     const selectedAreas = <?= json_encode(array_values($selected_areas)) ?>;
                     const selectedBranches = <?= json_encode(array_values($selected_branches)) ?>;
+                    const branchInfo = <?= json_encode($branch_info) ?>;
 
                     const mainzoneSelect = document.getElementById('mainzoneSelect');
                     const zoneSelect = document.getElementById('zoneSelect');
@@ -1443,20 +1156,15 @@ if (!empty($selected_branches)) {
                         const current = selectEl.value;
                         selectEl.innerHTML = '';
                         const optAll = document.createElement('option');
-                        optAll.value = '';
-                        optAll.textContent = allLabel;
+                        optAll.value = ''; optAll.textContent = allLabel;
                         selectEl.appendChild(optAll);
                         options.forEach(o => {
                             const opt = document.createElement('option');
-                            opt.value = o.value;
-                            opt.textContent = o.label;
+                            opt.value = o.value; opt.textContent = o.label;
                             selectEl.appendChild(opt);
                         });
-                        if ([...selectEl.options].some(o => o.value === current)) {
-                            selectEl.value = current;
-                        } else {
-                            selectEl.value = '';
-                        }
+                        if ([...selectEl.options].some(o => o.value === current)) selectEl.value = current;
+                        else selectEl.value = '';
                     }
 
                     function updateZones() {
@@ -1473,308 +1181,190 @@ if (!empty($selected_branches)) {
                         const isOpen = panel.classList.toggle('is-open');
                         btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
                     }
-
                     function closePanels() {
                         [regionPanel, areaPanel, branchPanel].forEach(p => p.classList.remove('is-open'));
                         [regionBtn, areaBtn, branchBtn].forEach(b => b.setAttribute('aria-expanded', 'false'));
                     }
-
                     function setButtonLabel(btn, checkedValues, allLabel, singularLabel) {
-                        if (!checkedValues.length) {
-                            btn.textContent = allLabel;
-                            return;
-                        }
-                        if (checkedValues.length === 1) {
-                            btn.textContent = `${singularLabel}: ${checkedValues[0]}`;
-                            return;
-                        }
+                        if (!checkedValues.length) { btn.textContent = allLabel; return; }
+                        if (checkedValues.length === 1) { btn.textContent = `${singularLabel}: ${checkedValues[0]}`; return; }
                         btn.textContent = `${singularLabel}s (${checkedValues.length})`;
                     }
-
                     function getCheckedValues(panelEl) {
                         return Array.from(panelEl.querySelectorAll('input[type="checkbox"]:not(.select-all-checkbox):checked')).map(i => i.value);
                     }
-
                     function buildCheckboxList(panelEl, name, values, checkedSet) {
                         panelEl.innerHTML = '';
                         values.forEach(v => {
                             const label = document.createElement('label');
                             label.className = 'multi-select__option';
-
                             const input = document.createElement('input');
-                            input.type = 'checkbox';
-                            input.name = name;
-                            input.value = v;
+                            input.type = 'checkbox'; input.name = name; input.value = v;
                             input.checked = checkedSet.has(v);
-
                             const span = document.createElement('span');
                             span.textContent = v.includes('|') ? v.replace('|', ' - ') : v;
-
-                            label.appendChild(input);
-                            label.appendChild(span);
+                            label.appendChild(input); label.appendChild(span);
                             panelEl.appendChild(label);
                         });
                     }
-
-                    function rebuildBranchCheckboxes() {
-                        const selectedRegionsList = getCheckedValues(regionPanel);
-                        const selectedAreasList = getCheckedValues(areaPanel);
-                        const mz = mainzoneSelect.value;
-                        const zn = zoneSelect.value;
-                        
-                        let branches = [];
-                        
-                        // Step 1: Filter by areas if selected
-                        if (selectedAreasList.length > 0) {
-                            selectedAreasList.forEach(area => {
-                                if (areaToBranch[area]) {
-                                    branches = branches.concat(areaToBranch[area]);
-                                }
-                            });
-                            branches = [...new Set(branches)];
-                        } 
-                        // Step 2: Filter by regions if no areas selected but regions are selected
-                        else if (selectedRegionsList.length > 0) {
-                            selectedRegionsList.forEach(region => {
-                                const areasInRegion = regToArea[region] || [];
-                                areasInRegion.forEach(area => {
-                                    if (areaToBranch[area]) {
-                                        branches = branches.concat(areaToBranch[area]);
-                                    }
-                                });
-                            });
-                            branches = [...new Set(branches)];
-                        } 
-                        // Step 3: Filter by zone if no region/area selected but zone is selected
-                        else if (zn) {
-                            const regionsInZone = znToReg[zn] || [];
-                            regionsInZone.forEach(region => {
-                                const areasInRegion = regToArea[region] || [];
-                                areasInRegion.forEach(area => {
-                                    if (areaToBranch[area]) {
-                                        branches = branches.concat(areaToBranch[area]);
-                                    }
-                                });
-                            });
-                            branches = [...new Set(branches)];
-                        } 
-                        // Step 4: Filter by mainzone if no other filters selected
-                        else if (mz) {
-                            const regionsInMz = mzToReg[mz] || [];
-                            regionsInMz.forEach(region => {
-                                const areasInRegion = regToArea[region] || [];
-                                areasInRegion.forEach(area => {
-                                    if (areaToBranch[area]) {
-                                        branches = branches.concat(areaToBranch[area]);
-                                    }
-                                });
-                            });
-                            branches = [...new Set(branches)];
-                        } 
-                        // Step 5: No filters - show all branches
-                        else {
-                            branches = allBranches;
-                        }
-                        
-                        // Additional filtering: If regions are selected but no areas, ensure branches match those regions
-                        if (selectedRegionsList.length > 0 && selectedAreasList.length === 0) {
-                            const validBranches = [];
-                            const branchInfo = <?= json_encode($branch_info) ?>;
-                            branches.forEach(branchKey => {
-                                if (branchInfo[branchKey]) {
-                                    const branchRegion = branchInfo[branchKey].region;
-                                    if (selectedRegionsList.includes(branchRegion)) {
-                                        validBranches.push(branchKey);
-                                    }
-                                }
-                            });
-                            branches = validBranches;
-                        }
-                        
-                        // Sort branches by ID
-                        branches.sort((a, b) => {
-                            const aId = parseInt(a.split('|')[0]) || 0;
-                            const bId = parseInt(b.split('|')[0]) || 0;
-                            return aId - bId;
-                        });
-
-                        // Get current checked values
-                        const currentChecked = branchPanel.querySelectorAll('input[type="checkbox"]').length
-                            ? getCheckedValues(branchPanel)
-                            : selectedBranches;
-                        const checked = new Set(currentChecked);
-                        // Remove any branches that are no longer available
-                        Array.from(checked).forEach(v => { 
-                            if (!branches.includes(v)) checked.delete(v); 
-                        });
-
-                        buildCheckboxList(branchPanel, 'branch[]', branches, checked);
-
-                        // Add "All Branches" option
-                        if (branches.length > 0) {
-                            const allOption = document.createElement('label');
-                            allOption.className = 'multi-select__option';
-                            allOption.style.fontWeight = 'bold';
-                            allOption.style.borderBottom = '1px solid #edf2f7';
-                            allOption.style.marginBottom = '4px';
-                            allOption.style.paddingBottom = '4px';
-                            allOption.style.position = 'sticky';
-                            allOption.style.top = '0';
-                            allOption.style.backgroundColor = '#fff';
-                            allOption.style.zIndex = '2';
-
-                            const allInput = document.createElement('input');
-                            allInput.type = 'checkbox';
-                            allInput.className = 'select-all-checkbox';
-                            allInput.checked = branches.length > 0 && branches.every(b => checked.has(b));
-
-                            const allSpan = document.createElement('span');
-                            allSpan.textContent = 'All Branches';
-
-                            allOption.appendChild(allInput);
-                            allOption.appendChild(allSpan);
-                            branchPanel.insertBefore(allOption, branchPanel.firstChild);
-
-                            allInput.addEventListener('change', function() {
-                                const isChecked = this.checked;
-                                branchPanel.querySelectorAll('input[type="checkbox"]:not(.select-all-checkbox)').forEach(cb => {
-                                    cb.checked = isChecked;
-                                });
-                                const checkedBranches = getCheckedValues(branchPanel);
-                                setButtonLabel(branchBtn, checkedBranches, 'All Branches', 'Branch');
-                            });
-                        }
-
-                        setButtonLabel(branchBtn, Array.from(checked), 'Branches', 'Branch');
+                    function addSelectAll(panelEl, values, checkedSet, allLabel) {
+                        if (values.length === 0) return null;
+                        const allOption = document.createElement('label');
+                        allOption.className = 'multi-select__option';
+                        allOption.style.cssText = 'font-weight:bold;border-bottom:1px solid #edf2f7;margin-bottom:4px;padding-bottom:4px;position:sticky;top:0;background:#fff;z-index:2';
+                        const allInput = document.createElement('input');
+                        allInput.type = 'checkbox'; allInput.className = 'select-all-checkbox';
+                        allInput.checked = values.every(v => checkedSet.has(v));
+                        const allSpan = document.createElement('span');
+                        allSpan.textContent = allLabel;
+                        allOption.appendChild(allInput); allOption.appendChild(allSpan);
+                        panelEl.insertBefore(allOption, panelEl.firstChild);
+                        return allInput;
                     }
 
-                    function rebuildRegionCheckboxes() {
+                    /* ---------- Allowed lists ---------- */
+                    function getAllowedRegions() {
                         const mz = mainzoneSelect.value;
                         const zn = zoneSelect.value;
-                        
-                        let regions = [];
-                        
-                        if (mz && mzToReg[mz]) {
-                            regions = mzToReg[mz];
-                        } 
-                        else if (zn && znToReg[zn]) {
-                            regions = znToReg[zn];
-                        } 
-                        else {
-                            regions = allRegions;
+                        let regions;
+                        if (mz && zn) {
+                            const a = new Set(mzToReg[mz] || []);
+                            const b = new Set(znToReg[zn] || []);
+                            regions = Array.from(a).filter(r => b.has(r));
+                        } else if (mz) {
+                            regions = (mzToReg[mz] || []).slice();
+                        } else if (zn) {
+                            regions = (znToReg[zn] || []).slice();
+                        } else {
+                            regions = allRegions.slice();
                         }
-                        
-                        if (mz && zn && mzToReg[mz] && znToReg[zn]) {
-                            const mzRegions = new Set(mzToReg[mz]);
-                            const znRegions = new Set(znToReg[zn]);
-                            regions = Array.from(mzRegions).filter(r => znRegions.has(r));
-                        }
-                        
                         regions.sort();
+                        return regions;
+                    }
 
+                    function getAllowedAreas(selectedRegionsList) {
+                        const areasSet = new Set();
+                        if (selectedRegionsList.length) {
+                            selectedRegionsList.forEach(r => (regToArea[r] || []).forEach(a => areasSet.add(a)));
+                        } else {
+                            const allowedRegions = getAllowedRegions();
+                            if (allowedRegions.length) {
+                                allowedRegions.forEach(r => (regToArea[r] || []).forEach(a => areasSet.add(a)));
+                            } else {
+                                allAreas.forEach(a => areasSet.add(a));
+                            }
+                        }
+                        return Array.from(areasSet).sort();
+                    }
+
+                    function getAllowedBranches(selectedRegionsList, selectedAreasList) {
+                        let branches = [];
+                        if (selectedAreasList.length > 0) {
+                            selectedAreasList.forEach(area => {
+                                if (areaToBranch[area]) branches = branches.concat(areaToBranch[area]);
+                            });
+                            branches = [...new Set(branches)];
+                        } else if (selectedRegionsList.length > 0) {
+                            selectedRegionsList.forEach(region => {
+                                (regToArea[region] || []).forEach(area => {
+                                    if (areaToBranch[area]) branches = branches.concat(areaToBranch[area]);
+                                });
+                            });
+                            branches = [...new Set(branches)];
+                        } else {
+                            const allowedRegions = getAllowedRegions();
+                            if (allowedRegions.length) {
+                                allowedRegions.forEach(region => {
+                                    (regToArea[region] || []).forEach(area => {
+                                        if (areaToBranch[area]) branches = branches.concat(areaToBranch[area]);
+                                    });
+                                });
+                                branches = [...new Set(branches)];
+                            } else {
+                                branches = allBranches.slice();
+                            }
+                        }
+
+                        // Always intersect with branches whose region belongs
+                        // to the currently allowed regions (mainzone/zone filtered).
+                        const allowedRegionsSet = new Set(getAllowedRegions());
+                        if (allowedRegionsSet.size > 0) {
+                            branches = branches.filter(bk => {
+                                const info = branchInfo[bk];
+                                return info && allowedRegionsSet.has(info.region);
+                            });
+                        }
+
+                        branches.sort((a, b) => (parseInt(a.split('|')[0]) || 0) - (parseInt(b.split('|')[0]) || 0));
+                        return branches;
+                    }
+
+                    /* ---------- Rebuild region ---------- */
+                    function rebuildRegionCheckboxes() {
+                        const regions = getAllowedRegions();
                         const currentChecked = regionPanel.querySelectorAll('input[type="checkbox"]').length
-                            ? getCheckedValues(regionPanel)
-                            : selectedRegions;
+                            ? getCheckedValues(regionPanel) : selectedRegions;
                         const checked = new Set(currentChecked);
                         Array.from(checked).forEach(v => { if (!regions.includes(v)) checked.delete(v); });
 
                         buildCheckboxList(regionPanel, 'region[]', regions, checked);
-
-                        if (regions.length > 0) {
-                            const allOption = document.createElement('label');
-                            allOption.className = 'multi-select__option';
-                            allOption.style.fontWeight = 'bold';
-                            allOption.style.borderBottom = '1px solid #edf2f7';
-                            allOption.style.marginBottom = '4px';
-                            allOption.style.paddingBottom = '4px';
-                            allOption.style.position = 'sticky';
-                            allOption.style.top = '0';
-                            allOption.style.backgroundColor = '#fff';
-                            allOption.style.zIndex = '2';
-
-                            const allInput = document.createElement('input');
-                            allInput.type = 'checkbox';
-                            allInput.className = 'select-all-checkbox';
-                            allInput.checked = regions.length > 0 && regions.every(r => checked.has(r));
-
-                            const allSpan = document.createElement('span');
-                            allSpan.textContent = 'All Regions';
-
-                            allOption.appendChild(allInput);
-                            allOption.appendChild(allSpan);
-                            regionPanel.insertBefore(allOption, regionPanel.firstChild);
-
+                        const allInput = addSelectAll(regionPanel, regions, checked, 'All Regions');
+                        if (allInput) {
                             allInput.addEventListener('change', function() {
-                                const isChecked = this.checked;
-                                regionPanel.querySelectorAll('input[type="checkbox"]:not(.select-all-checkbox)').forEach(cb => {
-                                    cb.checked = isChecked;
-                                });
-                                const regs = getCheckedValues(regionPanel);
-                                setButtonLabel(regionBtn, regs, 'All Regions', 'Region');
+                                regionPanel.querySelectorAll('input[type="checkbox"]:not(.select-all-checkbox)').forEach(cb => cb.checked = this.checked);
+                                setButtonLabel(regionBtn, getCheckedValues(regionPanel), 'All Regions', 'Region');
                                 rebuildAreaCheckboxes();
                             });
                         }
-
                         setButtonLabel(regionBtn, Array.from(checked), 'Regions', 'Region');
                     }
 
+                    /* ---------- Rebuild area ---------- */
                     function rebuildAreaCheckboxes() {
-                        const regs = getCheckedValues(regionPanel);
-                        const areasSet = new Set();
-                        if (regs.length) {
-                            regs.forEach(r => (regToArea[r] || []).forEach(a => areasSet.add(a)));
-                        } else {
-                            allAreas.forEach(a => areasSet.add(a));
-                        }
-                        const areas = Array.from(areasSet).sort();
+                        const selectedRegionsList = getCheckedValues(regionPanel);
+                        const areas = getAllowedAreas(selectedRegionsList);
 
                         const currentChecked = areaPanel.querySelectorAll('input[type="checkbox"]').length
-                            ? getCheckedValues(areaPanel)
-                            : selectedAreas;
+                            ? getCheckedValues(areaPanel) : selectedAreas;
                         const checked = new Set(currentChecked);
                         Array.from(checked).forEach(v => { if (!areas.includes(v)) checked.delete(v); });
 
                         buildCheckboxList(areaPanel, 'area[]', areas, checked);
-
-                        if (areas.length > 0) {
-                            const allOption = document.createElement('label');
-                            allOption.className = 'multi-select__option';
-                            allOption.style.fontWeight = 'bold';
-                            allOption.style.borderBottom = '1px solid #edf2f7';
-                            allOption.style.marginBottom = '4px';
-                            allOption.style.paddingBottom = '4px';
-                            allOption.style.position = 'sticky';
-                            allOption.style.top = '0';
-                            allOption.style.backgroundColor = '#fff';
-                            allOption.style.zIndex = '2';
-
-                            const allInput = document.createElement('input');
-                            allInput.type = 'checkbox';
-                            allInput.className = 'select-all-checkbox';
-                            allInput.checked = areas.length > 0 && areas.every(a => checked.has(a));
-
-                            const allSpan = document.createElement('span');
-                            allSpan.textContent = 'All Areas';
-
-                            allOption.appendChild(allInput);
-                            allOption.appendChild(allSpan);
-                            areaPanel.insertBefore(allOption, areaPanel.firstChild);
-
+                        const allInput = addSelectAll(areaPanel, areas, checked, 'All Areas');
+                        if (allInput) {
                             allInput.addEventListener('change', function() {
-                                const isChecked = this.checked;
-                                areaPanel.querySelectorAll('input[type="checkbox"]:not(.select-all-checkbox)').forEach(cb => {
-                                    cb.checked = isChecked;
-                                });
-                                const checkedAreas = getCheckedValues(areaPanel);
-                                setButtonLabel(areaBtn, checkedAreas, 'All Areas', 'Area');
+                                areaPanel.querySelectorAll('input[type="checkbox"]:not(.select-all-checkbox)').forEach(cb => cb.checked = this.checked);
+                                setButtonLabel(areaBtn, getCheckedValues(areaPanel), 'All Areas', 'Area');
                                 rebuildBranchCheckboxes();
                             });
                         }
-
                         setButtonLabel(areaBtn, Array.from(checked), 'Areas', 'Area');
                         rebuildBranchCheckboxes();
                     }
 
+                    /* ---------- Rebuild branch ---------- */
+                    function rebuildBranchCheckboxes() {
+                        const selectedRegionsList = getCheckedValues(regionPanel);
+                        const selectedAreasList = getCheckedValues(areaPanel);
+                        const branches = getAllowedBranches(selectedRegionsList, selectedAreasList);
+
+                        const currentChecked = branchPanel.querySelectorAll('input[type="checkbox"]').length
+                            ? getCheckedValues(branchPanel) : selectedBranches;
+                        const checked = new Set(currentChecked);
+                        Array.from(checked).forEach(v => { if (!branches.includes(v)) checked.delete(v); });
+
+                        buildCheckboxList(branchPanel, 'branch[]', branches, checked);
+                        const allInput = addSelectAll(branchPanel, branches, checked, 'All Branches');
+                        if (allInput) {
+                            allInput.addEventListener('change', function() {
+                                branchPanel.querySelectorAll('input[type="checkbox"]:not(.select-all-checkbox)').forEach(cb => cb.checked = this.checked);
+                                setButtonLabel(branchBtn, getCheckedValues(branchPanel), 'All Branches', 'Branch');
+                            });
+                        }
+                        setButtonLabel(branchBtn, Array.from(checked), 'Branches', 'Branch');
+                    }
+
+                    /* ---------- Event listeners ---------- */
                     mainzoneSelect.addEventListener('change', () => {
                         updateZones();
                         rebuildRegionCheckboxes();
@@ -1788,76 +1378,67 @@ if (!empty($selected_branches)) {
                         rebuildBranchCheckboxes();
                     });
 
-                    regionBtn.addEventListener('click', (e) => {
+                    regionBtn.addEventListener('click', e => {
                         e.preventDefault();
                         togglePanel(regionBtn, regionPanel);
                         areaPanel.classList.remove('is-open');
                         branchPanel.classList.remove('is-open');
                     });
-
-                    areaBtn.addEventListener('click', (e) => {
+                    areaBtn.addEventListener('click', e => {
                         e.preventDefault();
                         togglePanel(areaBtn, areaPanel);
                         regionPanel.classList.remove('is-open');
                         branchPanel.classList.remove('is-open');
                     });
-
-                    branchBtn.addEventListener('click', (e) => {
+                    branchBtn.addEventListener('click', e => {
                         e.preventDefault();
                         togglePanel(branchBtn, branchPanel);
                         regionPanel.classList.remove('is-open');
                         areaPanel.classList.remove('is-open');
                     });
 
-                    regionPanel.addEventListener('change', (e) => {
+                    regionPanel.addEventListener('change', e => {
                         if (e.target && e.target.matches('input[type="checkbox"]') && !e.target.classList.contains('select-all-checkbox')) {
                             const allCb = regionPanel.querySelector('.select-all-checkbox');
                             if (allCb) {
                                 const others = Array.from(regionPanel.querySelectorAll('input[type="checkbox"]:not(.select-all-checkbox)'));
                                 allCb.checked = others.length > 0 && others.every(cb => cb.checked);
                             }
-
-                            const regs = getCheckedValues(regionPanel);
-                            setButtonLabel(regionBtn, regs, 'All Regions', 'Region');
+                            setButtonLabel(regionBtn, getCheckedValues(regionPanel), 'All Regions', 'Region');
                             rebuildAreaCheckboxes();
-                            rebuildBranchCheckboxes();
                         }
                     });
 
-                    areaPanel.addEventListener('change', (e) => {
+                    areaPanel.addEventListener('change', e => {
                         if (e.target && e.target.matches('input[type="checkbox"]') && !e.target.classList.contains('select-all-checkbox')) {
                             const allCb = areaPanel.querySelector('.select-all-checkbox');
                             if (allCb) {
                                 const others = Array.from(areaPanel.querySelectorAll('input[type="checkbox"]:not(.select-all-checkbox)'));
                                 allCb.checked = others.length > 0 && others.every(cb => cb.checked);
                             }
-
-                            const areas = getCheckedValues(areaPanel);
-                            setButtonLabel(areaBtn, areas, 'All Areas', 'Area');
+                            setButtonLabel(areaBtn, getCheckedValues(areaPanel), 'All Areas', 'Area');
                             rebuildBranchCheckboxes();
                         }
                     });
 
-                    branchPanel.addEventListener('change', (e) => {
+                    branchPanel.addEventListener('change', e => {
                         if (e.target && e.target.matches('input[type="checkbox"]') && !e.target.classList.contains('select-all-checkbox')) {
                             const allCb = branchPanel.querySelector('.select-all-checkbox');
                             if (allCb) {
                                 const others = Array.from(branchPanel.querySelectorAll('input[type="checkbox"]:not(.select-all-checkbox)'));
                                 allCb.checked = others.length > 0 && others.every(cb => cb.checked);
                             }
-
-                            const branches = getCheckedValues(branchPanel);
-                            setButtonLabel(branchBtn, branches, 'All Branches', 'Branch');
+                            setButtonLabel(branchBtn, getCheckedValues(branchPanel), 'All Branches', 'Branch');
                         }
                     });
 
-                    document.addEventListener('click', (e) => {
-                        const regionWrap = document.getElementById('regionMulti');
-                        const areaWrap = document.getElementById('areaMulti');
-                        const branchWrap = document.getElementById('branchMulti');
-                        if (regionWrap && regionWrap.contains(e.target)) return;
-                        if (areaWrap && areaWrap.contains(e.target)) return;
-                        if (branchWrap && branchWrap.contains(e.target)) return;
+                    document.addEventListener('click', e => {
+                        const rw = document.getElementById('regionMulti');
+                        const aw = document.getElementById('areaMulti');
+                        const bw = document.getElementById('branchMulti');
+                        if (rw && rw.contains(e.target)) return;
+                        if (aw && aw.contains(e.target)) return;
+                        if (bw && bw.contains(e.target)) return;
                         closePanels();
                     });
 
@@ -1867,13 +1448,10 @@ if (!empty($selected_branches)) {
                     rebuildBranchCheckboxes();
                 })();
             </script>
-
         </div>
-
     </main>
 
 <?php include '../footer.php'; ?>
-
 </body>
 </html>
 

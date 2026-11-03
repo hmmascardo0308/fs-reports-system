@@ -19,6 +19,239 @@ $username  = $_SESSION['username'] ?? "unknown";
 $full_name = $_SESSION['full_name'] ?? "unknown";
 $user_type = $_SESSION['user_type'] ?? "unknown";
 
+// ============================================================
+// SAVE HANDLER: comparative_report_with_ho
+// ============================================================
+$__save_raw = null;
+$__save_payload = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $__save_raw = file_get_contents('php://input');
+    if ($__save_raw !== false && $__save_raw !== '') {
+        $__tmp = json_decode($__save_raw, true);
+        if (is_array($__tmp)) {
+            $__save_payload = $__tmp;
+        }
+    }
+    if ($__save_payload === null && !empty($_POST['payload'])) {
+        $__tmp = json_decode($_POST['payload'], true);
+        if (is_array($__tmp)) {
+            $__save_payload = $__tmp;
+        }
+    }
+}
+
+$__is_save_action = (
+    $_SERVER['REQUEST_METHOD'] === 'POST' && (
+        (isset($_POST['action']) && $_POST['action'] === 'save_comparative') ||
+        (is_array($__save_payload) && ($__save_payload['action'] ?? '') === 'save_comparative')
+    )
+);
+
+if ($__is_save_action) {
+    header('Content-Type: application/json; charset=utf-8');
+
+    $payload = $__save_payload;
+    if (!is_array($payload) || empty($payload['rows']) || !is_array($payload['rows'])) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'No rows to save.'
+        ]);
+        exit;
+    }
+
+    $save_primary  = trim((string)($payload['primary_period'] ?? ''));
+    $save_previous = trim((string)($payload['previous_period'] ?? ''));
+    $save_third    = trim((string)($payload['third_period'] ?? ''));
+    $save_gl_mode  = trim((string)($payload['gl_code_logic'] ?? 'old'));
+    if (!in_array($save_gl_mode, ['old', 'new', 'mixed'], true)) {
+        $save_gl_mode = 'old';
+    }
+
+    if ($save_primary === '' || $save_previous === '') {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Primary and Previous periods are required to save.'
+        ]);
+        exit;
+    }
+
+    // Convert YYYY-MM -> YYYY-MM-01 for DATE columns
+    $toDate = static function (string $ym): ?string {
+        $ym = trim($ym);
+        if ($ym === '') {
+            return null;
+        }
+        if (preg_match('/^\d{4}-\d{2}$/', $ym)) {
+            return $ym . '-01';
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $ym)) {
+            return $ym;
+        }
+        return null;
+    };
+
+    $primary_date  = $toDate($save_primary);
+    $previous_date = $toDate($save_previous);
+    $third_date    = $toDate($save_third);
+
+    if ($primary_date === null || $previous_date === null) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Invalid period format.'
+        ]);
+        exit;
+    }
+
+    $adjusted_by = $username;
+    // Asia/Manila local time
+    try {
+        $dt = new DateTime('now', new DateTimeZone('Asia/Manila'));
+        $adjusted_at = $dt->format('Y-m-d H:i:s');
+    } catch (Exception $e) {
+        $adjusted_at = date('Y-m-d H:i:s');
+    }
+
+    // Replace existing snapshot for this period set + GL mode
+    $del_third = $third_date !== null ? $third_date : '';
+    $del_sql = "
+        DELETE FROM fs_reports.comparative_report_with_ho
+        WHERE primary_period = ?
+          AND previous_period = ?
+          AND gl_code_logic = ?
+          AND (
+                (? = '' AND third_period IS NULL)
+             OR third_period = NULLIF(?, '')
+          )
+    ";
+    $del_stmt = mysqli_prepare($conn, $del_sql);
+    if (!$del_stmt) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Prepare delete failed: ' . mysqli_error($conn)
+        ]);
+        exit;
+    }
+    mysqli_stmt_bind_param(
+        $del_stmt,
+        'sssss',
+        $primary_date,
+        $previous_date,
+        $save_gl_mode,
+        $del_third,
+        $del_third
+    );
+    if (!mysqli_stmt_execute($del_stmt)) {
+        $err = mysqli_stmt_error($del_stmt);
+        mysqli_stmt_close($del_stmt);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Delete failed: ' . $err
+        ]);
+        exit;
+    }
+    mysqli_stmt_close($del_stmt);
+
+    // NULLIF converts empty string to SQL NULL for optional third_period
+    $ins_sql = "
+        INSERT INTO fs_reports.comparative_report_with_ho (
+            gl_id,
+            sort_order,
+            description,
+            sub_order,
+            gl_description_comparative,
+            primary_period,
+            primary_period_amount,
+            previous_period,
+            previous_period_amount,
+            third_period,
+            third_period_amount,
+            gl_code_logic,
+            adjusted_by,
+            adjusted_at
+        ) VALUES (
+            ?, ?, ?, ?, ?,
+            ?, ?,
+            ?, ?,
+            NULLIF(?, ''), ?,
+            ?, ?, ?
+        )
+    ";
+    $ins_stmt = mysqli_prepare($conn, $ins_sql);
+    if (!$ins_stmt) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Prepare insert failed: ' . mysqli_error($conn)
+        ]);
+        exit;
+    }
+
+    $inserted = 0;
+    $errors = [];
+    $bind_third_date = $third_date !== null ? $third_date : '';
+
+    foreach ($payload['rows'] as $r) {
+        $gl_id = trim((string)($r['gl_id'] ?? ''));
+        if ($gl_id === '') {
+            continue;
+        }
+
+        $sort_order  = (int)($r['sort_order'] ?? 0);
+        $description = trim((string)($r['description'] ?? ''));
+        $sub_order   = (int)($r['sub_order'] ?? 0);
+        $gl_desc     = trim((string)($r['gl_description_comparative'] ?? ''));
+        $p_amt       = (float)($r['primary_period_amount'] ?? 0);
+        $prev_amt    = (float)($r['previous_period_amount'] ?? 0);
+        $t_amt       = (float)($r['third_period_amount'] ?? 0);
+
+        // types: s i s i s | s d | s d | s d | s s s  = 14 params
+        mysqli_stmt_bind_param(
+            $ins_stmt,
+            'sisissdsdsdsss',
+            $gl_id,
+            $sort_order,
+            $description,
+            $sub_order,
+            $gl_desc,
+            $primary_date,
+            $p_amt,
+            $previous_date,
+            $prev_amt,
+            $bind_third_date,
+            $t_amt,
+            $save_gl_mode,
+            $adjusted_by,
+            $adjusted_at
+        );
+
+        if (!mysqli_stmt_execute($ins_stmt)) {
+            $errors[] = $gl_id . ': ' . mysqli_stmt_error($ins_stmt);
+            continue;
+        }
+        $inserted++;
+    }
+
+    mysqli_stmt_close($ins_stmt);
+
+    if ($inserted === 0 && !empty($errors)) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Insert failed: ' . implode('; ', array_slice($errors, 0, 5)),
+            'inserted' => 0
+        ]);
+        exit;
+    }
+
+    echo json_encode([
+        'success' => true,
+        'message' => "Saved {$inserted} row(s) to comparative_report_with_ho.",
+        'inserted' => $inserted,
+        'adjusted_by' => $adjusted_by,
+        'adjusted_at' => $adjusted_at,
+        'errors' => $errors
+    ]);
+    exit;
+}
+
 // Filters
 $transaction_year = $_GET['transaction_year'] ?? '';
 $primary_period = $_GET['primary_period'] ?? '';
@@ -38,6 +271,14 @@ $inj_sort_order = ($gl_code_mode === 'old') ? 17 : 18;
 // INJ section total is INJ-3 + INJ-4 + INJ-5 + INJ-6
 // (INJ-3 is already INJ-1 - INJ-2, so INJ-2 must NOT be added again)
 $inj_section_ids = ['INJ-3', 'INJ-4', 'INJ-5', 'INJ-6'];
+
+// Determine COS (Cost of Sales/Service) sort order based on GL mode
+// old: sort_order 23, new/mixed: sort_order 24
+$cos_sort_order = ($gl_code_mode === 'old') ? 23 : 24;
+
+// COS section total is COS-4 + COS-5 + COS-6 + COS-7 + COS-8 + COS-9
+// (COS-4 is already COS-1 + COS-2 + COS-3, so COS-1/2/3 must NOT be added again)
+$cos_section_ids = ['COS-4', 'COS-5', 'COS-6', 'COS-7', 'COS-8', 'COS-9'];
 
 // Error messages for validation
 $error_message = '';
@@ -2084,42 +2325,38 @@ function compute_table_rows_for_region_area(
         $grouped_rows as $sort_order => $rows
     ) {
 
-        // Hide details for certain sort orders
+        // Hide details visually for certain sort orders (old: 10,13 / new: 11,14)
+        // but STILL emit the detail rows so Save can persist their amounts.
         $hide_details = ($gl_code_mode === 'old') ? [10, 13] : [11, 14];
-        
-        if (
-            !in_array(
-                (int)$sort_order,
-                $hide_details,
-                true
-            )
-        ) {
+        $hide_this_section = in_array((int)$sort_order, $hide_details, true);
 
-            foreach ($rows as $row) {
-
-                $final_table_rows[] =
-                    $row;
+        foreach ($rows as $row) {
+            if ($hide_this_section) {
+                $row['is_hidden_detail'] = true;
             }
+            $final_table_rows[] = $row;
         }
 
         // ====================================================
-        // INJ SECTION TOTAL
+        // SPECIAL SECTION TOTALS (INJ + COS)
         // ====================================================
-        // For the INJ sort order, the section total is NOT just
-        // INJ-3. It is:
-        //
+        // INJ sort order: section total is
         //     INJ-3 + INJ-4 + INJ-5 + INJ-6
+        // (INJ-3 already contains INJ-1 - INJ-2, so INJ-2 must
+        //  NOT be added again. In old GL / historical Period 3,
+        //  INJ-4..INJ-6 are 0 so the total falls back to INJ-3.)
         //
-        // INJ-3 already contains (INJ-1 - INJ-2), so INJ-2 must
-        // NOT be added again.
-        //
-        // In old GL mode and historical (<=2025) Period 3, INJ-4
-        // through INJ-6 will naturally be 0, so the total falls
-        // back to INJ-3 alone.
+        // COS (Cost of Sales/Service) sort order: section total is
+        //     COS-4 + COS-5 + COS-6 + COS-7 + COS-8 + COS-9
+        // (COS-4 already equals COS-1 + COS-2 + COS-3, so those
+        //  three lines must NOT be added again.)
         // ====================================================
 
         $inj3_sort_order = ($gl_code_mode === 'old') ? 17 : 18;
         $inj_section_ids = ['INJ-3', 'INJ-4', 'INJ-5', 'INJ-6'];
+
+        $cos_sort_order_local = ($gl_code_mode === 'old') ? 23 : 24;
+        $cos_section_ids = ['COS-4', 'COS-5', 'COS-6', 'COS-7', 'COS-8', 'COS-9'];
 
         if ((int)$sort_order === $inj3_sort_order) {
 
@@ -2133,6 +2370,32 @@ function compute_table_rows_for_region_area(
                     in_array(
                         ($row['gl_id'] ?? ''),
                         $inj_section_ids,
+                        true
+                    )
+                ) {
+                    $total_primary_total  +=
+                        (float)($row['primary_total']  ?? 0);
+
+                    $total_previous_total +=
+                        (float)($row['previous_total'] ?? 0);
+
+                    $total_third_total    +=
+                        (float)($row['third_total']    ?? 0);
+                }
+            }
+
+        } elseif ((int)$sort_order === $cos_sort_order_local) {
+
+            $total_primary_total  = 0.0;
+            $total_previous_total = 0.0;
+            $total_third_total    = 0.0;
+
+            foreach ($rows as $row) {
+
+                if (
+                    in_array(
+                        ($row['gl_id'] ?? ''),
+                        $cos_section_ids,
                         true
                     )
                 ) {
@@ -3359,6 +3622,26 @@ $table_rows =
                     Collapse
                 </button>
 
+                <button
+                    type="button"
+                    class="btn-save"
+                    id="saveReportBtn"
+                    title="Save current amounts to comparative_report_with_ho"
+                    style="background:#059669;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;"
+                >
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Save
+                </button>
+
+                <a
+                    href="generate_comparative_with_ho_allocate.php"
+                    class="btn-report"
+                >
+                    <i class="fa-solid fa-file"></i>
+                    Generate Report
+                </a>
+
+
                 <a
                     href="?reset=1"
                     class="btn-reset"
@@ -3374,13 +3657,10 @@ $table_rows =
         <!-- TABLE -->
 
         <div class="region-block">
-
             <div class="tables-scroll">
-
                 <div class="tables-grid">
-
                     <div class="table-container">
-
+ 
                         <table class="data-table">
 
                             <thead>
@@ -3729,20 +4009,51 @@ $table_rows =
                                         $row_gl_id =
                                             $row['gl_id'] ?? '';
 
+                                        $row_sub_order =
+                                            $row['sub_order'] ?? '';
+
+                                        $row_gl_desc =
+                                            $row['gl_description'] ?? '';
+
+                                        $row_section_desc =
+                                            $sort_order_descriptions[
+                                                $row['sort_order'] ?? ''
+                                            ] ?? (
+                                                $sort_order_descriptions[
+                                                    (int)($row['sort_order'] ?? 0)
+                                                ] ?? ''
+                                            );
+
                                     ?>
 
+                                    <?php
+                                        $is_hidden_detail = !empty($row['is_hidden_detail']);
+                                    ?>
                                     <tr
                                         class="<?= $is_summary_row
                                             ? 'summary-row'
-                                            : 'data-row' ?>"
+                                            : 'data-row' ?><?= $is_hidden_detail ? ' hidden-detail-row' : '' ?>"
                                         data-sort-order="<?= htmlspecialchars(
-                                            $row['sort_order'] ?? ''
+                                            (string)($row['sort_order'] ?? '')
                                         ) ?>"
                                         data-gl-id="<?= htmlspecialchars(
                                             $row_gl_id
                                         ) ?>"
                                         <?php if (!$is_summary_row): ?>
                                             data-is-detail="true"
+                                            data-sub-order="<?= htmlspecialchars(
+                                                (string)$row_sub_order
+                                            ) ?>"
+                                            data-gl-description="<?= htmlspecialchars(
+                                                $row_gl_desc
+                                            ) ?>"
+                                            data-description="<?= htmlspecialchars(
+                                                $row_section_desc
+                                            ) ?>"
+                                        <?php endif; ?>
+                                        <?php if ($is_hidden_detail): ?>
+                                            style="display:none;"
+                                            data-hidden-detail="true"
                                         <?php endif; ?>
                                     >
 
@@ -4697,6 +5008,8 @@ document.addEventListener(
         const REPORT_RANGES = <?= json_encode(getSortOrderRanges($gl_code_mode)) ?>;
         const REPORT_INJ_SORT_ORDER = <?= json_encode($inj_sort_order) ?>;
         const REPORT_INJ_SECTION_IDS = <?= json_encode($inj_section_ids) ?>;
+        const REPORT_COS_SORT_ORDER = <?= json_encode($cos_sort_order) ?>;
+        const REPORT_COS_SECTION_IDS = <?= json_encode($cos_section_ids) ?>;
         const HAS_THIRD_PERIOD = <?= json_encode(!empty($third_period)) ?>;
 
         // Track unsaved client-side edits (no server save yet)
@@ -4898,6 +5211,36 @@ document.addEventListener(
             return { primary, previous, third };
         }
 
+        // ============================================================
+        // COS-SPECIFIC SUM: COS-4 + COS-5 + COS-6 + COS-7 + COS-8 + COS-9
+        // ============================================================
+        // The Cost of Sales/Service sort order's summary row uses a
+        // different rule than other summary rows. COS-4 is already
+        // COS-1 + COS-2 + COS-3, so those three lines must NOT be
+        // added again. The section total is:
+        //
+        //     COS-4 + COS-5 + COS-6 + COS-7 + COS-8 + COS-9
+        //
+        // NOTE: This function relies on data-gl-id being present on
+        // the detail <tr> elements. That attribute is emitted by PHP.
+        // ============================================================
+        function sumDetailsForCosSortOrder(tbody, sortOrder) {
+            let primary = 0, previous = 0, third = 0;
+            const rows = Array.from(tbody.querySelectorAll(
+                'tr.data-row[data-is-detail="true"][data-sort-order="' + sortOrder + '"]'
+            ));
+            rows.forEach(function (row) {
+                const glId = row.getAttribute('data-gl-id') || '';
+                if (REPORT_COS_SECTION_IDS.indexOf(glId) !== -1) {
+                    const a = getRowAmounts(row);
+                    primary += a.primary;
+                    previous += a.previous;
+                    third += a.third;
+                }
+            });
+            return { primary, previous, third };
+        }
+
         function updateSummaryRow(tr, amounts) {
             if (!tr) return;
             const { cells } = getRowAmounts(tr);
@@ -4925,6 +5268,13 @@ document.addEventListener(
         function getSummaryAmountBySortOrder(tbody, sortOrder) {
             const sumRow = findSummaryRowForSortOrder(tbody, sortOrder);
             if (!sumRow) {
+                // Fall back to detail sum, applying special rules when needed
+                if (parseInt(sortOrder) === parseInt(REPORT_INJ_SORT_ORDER)) {
+                    return sumDetailsForInjSortOrder(tbody, sortOrder);
+                }
+                if (parseInt(sortOrder) === parseInt(REPORT_COS_SORT_ORDER)) {
+                    return sumDetailsForCosSortOrder(tbody, sortOrder);
+                }
                 return sumDetailsForSortOrder(tbody, sortOrder);
             }
             return {
@@ -4973,10 +5323,16 @@ document.addEventListener(
                 sa.previous += a.previous;
                 sa.third += a.third;
             }
-            const saRow = findNamedSummaryRow(tbody, 'TOTAL SELLING');
-            if (saRow) updateSummaryRow(saRow, sa);
-            const saRow2 = findNamedSummaryRow(tbody, 'SELLING & ADMIN');
-            if (saRow2 && saRow2 !== saRow) updateSummaryRow(saRow2, sa);
+            // Only update the TOTAL row — not the section header
+            // "SELLING & ADMIN EXPENSE", which must stay blank.
+            const saRow = findNamedSummaryRow(tbody, 'TOTAL SELLING AND ADMIN');
+            if (saRow) {
+                updateSummaryRow(saRow, sa);
+            } else {
+                // Fallback for shorter label variants
+                const saRowFallback = findNamedSummaryRow(tbody, 'TOTAL SELLING');
+                if (saRowFallback) updateSummaryRow(saRowFallback, sa);
+            }
 
             const ebitda = {
                 primary: gp.primary - sa.primary,
@@ -5017,6 +5373,49 @@ document.addEventListener(
             if (netRow) updateSummaryRow(netRow, net);
         }
 
+        // ============================================================
+        // COS-4 AUTO-CALC: COS-4 = COS-1 + COS-2 + COS-3
+        // ============================================================
+        // When any of COS-1 / COS-2 / COS-3 is edited, COS-4 is
+        // recalculated for the same period column(s) so it always
+        // reflects the sum of the three component lines.
+        // ============================================================
+        function findDetailRowByGlId(tbody, sortOrder, glId) {
+            return tbody.querySelector(
+                'tr.data-row[data-is-detail="true"][data-sort-order="' +
+                sortOrder + '"][data-gl-id="' + glId + '"]'
+            );
+        }
+
+        function recalcCos4FromComponents(tbody, sortOrder) {
+            if (parseInt(sortOrder) !== parseInt(REPORT_COS_SORT_ORDER)) {
+                return;
+            }
+
+            const cos1 = findDetailRowByGlId(tbody, sortOrder, 'COS-1');
+            const cos2 = findDetailRowByGlId(tbody, sortOrder, 'COS-2');
+            const cos3 = findDetailRowByGlId(tbody, sortOrder, 'COS-3');
+            const cos4 = findDetailRowByGlId(tbody, sortOrder, 'COS-4');
+
+            if (!cos4) return;
+
+            const a1 = cos1 ? getRowAmounts(cos1) : { primary: 0, previous: 0, third: 0 };
+            const a2 = cos2 ? getRowAmounts(cos2) : { primary: 0, previous: 0, third: 0 };
+            const a3 = cos3 ? getRowAmounts(cos3) : { primary: 0, previous: 0, third: 0 };
+
+            const sum = {
+                primary:  a1.primary  + a2.primary  + a3.primary,
+                previous: a1.previous + a2.previous + a3.previous,
+                third:    a1.third    + a2.third    + a3.third
+            };
+
+            const { cells } = getRowAmounts(cos4);
+            if (cells[4]) setCellAmount(cells[4], sum.primary, false);
+            if (cells[6]) setCellAmount(cells[6], sum.previous, false);
+            if (cells[8]) setCellAmount(cells[8], sum.third, false);
+            updateRowVariances(cos4);
+        }
+
         function onAmountCommitted(td) {
             const tr = td.closest('tr');
             if (!tr || !tr.classList.contains('data-row')) return;
@@ -5027,11 +5426,24 @@ document.addEventListener(
             const tbody = tr.closest('tbody');
             if (!tbody || !sortOrder) return;
 
-            // INJ sort order uses a special section-total rule:
-            // INJ-3 + INJ-4 + INJ-5 + INJ-6
+            // If COS-1 / COS-2 / COS-3 was edited, auto-update COS-4
+            const editedGlId = tr.getAttribute('data-gl-id') || '';
+            if (
+                editedGlId === 'COS-1' ||
+                editedGlId === 'COS-2' ||
+                editedGlId === 'COS-3'
+            ) {
+                recalcCos4FromComponents(tbody, sortOrder);
+            }
+
+            // Special section-total rules:
+            // INJ: INJ-3 + INJ-4 + INJ-5 + INJ-6
+            // COS: COS-4 + COS-5 + COS-6 + COS-7 + COS-8 + COS-9
             let sectionTotals;
             if (parseInt(sortOrder) === parseInt(REPORT_INJ_SORT_ORDER)) {
                 sectionTotals = sumDetailsForInjSortOrder(tbody, sortOrder);
+            } else if (parseInt(sortOrder) === parseInt(REPORT_COS_SORT_ORDER)) {
+                sectionTotals = sumDetailsForCosSortOrder(tbody, sortOrder);
             } else {
                 sectionTotals = sumDetailsForSortOrder(tbody, sortOrder);
             }
@@ -5125,6 +5537,136 @@ document.addEventListener(
                 'td.editable-amount:hover { background-color: #ffd6d6; outline: 1px dashed #f50b0b; }' +
                 'td.editable-amount input.amount-edit-input { cursor: text; }';
             document.head.appendChild(style);
+        }
+
+        // ============================================================
+        // SAVE TO comparative_report_with_ho
+        // ============================================================
+        const REPORT_PRIMARY_PERIOD  = <?= json_encode($primary_period) ?>;
+        const REPORT_PREVIOUS_PERIOD = <?= json_encode($previous_period) ?>;
+        const REPORT_THIRD_PERIOD    = <?= json_encode($third_period) ?>;
+        const REPORT_USERNAME        = <?= json_encode($username) ?>;
+
+        function collectDetailRowsForSave(tbody) {
+            const rows = [];
+            const detailRows = tbody.querySelectorAll(
+                'tr.data-row[data-is-detail="true"][data-gl-id]'
+            );
+            detailRows.forEach(function (tr) {
+                const glId = (tr.getAttribute('data-gl-id') || '').trim();
+                if (!glId) return;
+
+                const amounts = getRowAmounts(tr);
+                rows.push({
+                    gl_id: glId,
+                    sort_order: parseInt(tr.getAttribute('data-sort-order') || '0', 10) || 0,
+                    sub_order: parseInt(tr.getAttribute('data-sub-order') || '0', 10) || 0,
+                    description: tr.getAttribute('data-description') || '',
+                    gl_description_comparative: tr.getAttribute('data-gl-description') || '',
+                    primary_period_amount: amounts.primary,
+                    previous_period_amount: amounts.previous,
+                    third_period_amount: amounts.third
+                });
+            });
+            return rows;
+        }
+
+        function showSaveToast(message, isError) {
+            let toast = document.getElementById('saveReportToast');
+            if (toast) toast.remove();
+
+            toast = document.createElement('div');
+            toast.id = 'saveReportToast';
+            toast.setAttribute('role', 'status');
+            toast.style.cssText =
+                'position:fixed;bottom:24px;right:24px;z-index:99999;' +
+                'max-width:420px;padding:14px 18px;border-radius:8px;' +
+                'font-family:Inter,system-ui,sans-serif;font-size:14px;font-weight:600;' +
+                'box-shadow:0 4px 16px rgba(0,0,0,.2);color:#fff;' +
+                (isError ? 'background:#b91c1c;' : 'background:#059669;');
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(function () {
+                if (toast && toast.parentNode) toast.remove();
+            }, 5000);
+        }
+
+        const saveBtn = document.getElementById('saveReportBtn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', function () {
+                const tbody = document.querySelector('.report-tbody');
+                if (!tbody) {
+                    showSaveToast('No report data to save.', true);
+                    return;
+                }
+                if (!REPORT_PRIMARY_PERIOD || !REPORT_PREVIOUS_PERIOD) {
+                    showSaveToast('Primary and Previous periods are required before saving.', true);
+                    return;
+                }
+
+                const rows = collectDetailRowsForSave(tbody);
+                if (rows.length === 0) {
+                    showSaveToast('No detail rows found to save.', true);
+                    return;
+                }
+
+                const payload = {
+                    primary_period: REPORT_PRIMARY_PERIOD,
+                    previous_period: REPORT_PREVIOUS_PERIOD,
+                    third_period: REPORT_THIRD_PERIOD || '',
+                    gl_code_logic: REPORT_GL_MODE,
+                    rows: rows
+                };
+
+                saveBtn.disabled = true;
+                saveBtn.innerHTML =
+                    '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+
+                fetch(window.location.pathname + window.location.search, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(
+                        Object.assign({ action: 'save_comparative' }, payload)
+                    )
+                })
+                .then(function (res) {
+                    return res.json().then(function (data) {
+                        return { ok: res.ok, data: data };
+                    });
+                })
+                .then(function (result) {
+                    if (result.data && result.data.success) {
+                        hasUnsavedEdits = false;
+                        const banner = document.getElementById('unsavedEditsBanner');
+                        if (banner) {
+                            banner.remove();
+                            document.body.style.paddingTop = '';
+                        }
+                        showSaveToast(
+                            result.data.message ||
+                            ('Saved ' + (result.data.inserted || 0) + ' row(s).'),
+                            false
+                        );
+                    } else {
+                        showSaveToast(
+                            (result.data && result.data.message) ||
+                            'Save failed.',
+                            true
+                        );
+                    }
+                })
+                .catch(function (err) {
+                    showSaveToast('Save failed: ' + (err && err.message ? err.message : 'network error'), true);
+                })
+                .finally(function () {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML =
+                        '<i class="fa-solid fa-floppy-disk"></i> Save';
+                });
+            });
         }
 
         // Warn when using Filter / Clear while there are unsaved edits

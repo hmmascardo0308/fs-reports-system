@@ -257,7 +257,8 @@ align-items: center;
 
 .btn-filter,
 .btn-save,
-.btn-reset {
+.btn-reset,
+.btn-report {
  padding: 8px 16px;
 font-size: 14px;
 border: none;
@@ -293,6 +294,16 @@ transform: translateY(-2px);
 box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
 }
 
+.btn-report {
+background: linear-gradient(135deg, #878726 0%, #a6a613 100%);
+color: white;
+}
+
+.btn-report:hover {
+transform: translateY(-2px);
+box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
 .btn-reset {
 background: #6c757d;
 color: white;
@@ -308,14 +319,10 @@ transform: translateY(-2px);
 width: 100%;
 overflow-x: auto;
 overflow-y: auto;
-
-
 }
 
 .region-block {
 margin-bottom: 20px;
-
-
 }
 
 .tables-grid {

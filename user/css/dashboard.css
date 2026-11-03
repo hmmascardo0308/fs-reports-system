@@ -939,3 +939,167 @@ box-shadow: 0 0 0 20px rgba(255, 255, 255, 0);
 box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
 }
 }
+
+
+
+        /* ========== Admin Sticky Note ========== */
+        .admin-sticky-note {
+            position: absolute;
+            top: 110px;
+            right: 50px;
+            width: 350px;
+            min-width: 220px;
+            min-height: 180px;
+            background: #fff9c4;
+            border: 1px solid #e6d98c;
+            border-radius: 4px;
+            box-shadow: 3px 3px 14px rgba(0,0,0,0.18);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            z-index: 9000;
+            overflow: hidden;
+            resize: both;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+            transform: rotate(-1deg);
+            transition: box-shadow 0.2s;
+        }
+
+        .admin-sticky-note.dragging {
+            opacity: 0.93;
+            box-shadow: 6px 6px 20px rgba(0,0,0,0.28);
+            z-index: 9999;
+            transform: none !important;
+        }
+
+        .admin-sticky-note.minimized {
+            display: none !important;
+        }
+
+        .admin-sticky-note .sticky-header {
+            background: #f7e98e;
+            padding: 8px 12px;
+            cursor: move;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: 700;
+            color: #5d4e00;
+            border-bottom: 1px solid #e6d98c;
+        }
+
+        .admin-sticky-note .sticky-header .sticky-title {
+            flex: 1;
+            font-weight: 700;
+            color: #5d4e00;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .admin-sticky-note .sticky-actions {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .admin-sticky-note .sticky-btn {
+            background: none;
+            border: none;
+            color: #8a7a00;
+            font-size: 15px;
+            cursor: pointer;
+            padding: 2px 5px;
+            line-height: 1;
+            border-radius: 3px;
+            transition: all 0.15s;
+        }
+
+        .admin-sticky-note .sticky-btn:hover {
+            background: rgba(0,0,0,0.08);
+            color: #5d4e00;
+        }
+
+        .admin-sticky-note .sticky-btn.close-btn:hover {
+            color: #c00;
+            background: rgba(200,0,0,0.1);
+        }
+
+        .admin-sticky-note .sticky-body {
+            flex: 1;
+            padding: 12px 14px;
+            font-size: 14px;
+            line-height: 1.55;
+            color: #333;
+            background: transparent;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .admin-sticky-note .sticky-footer {
+            padding: 6px 12px;
+            font-size: 11px;
+            color: #8a7a00;
+            border-top: 1px dashed #e6d98c;
+            text-align: right;
+        }
+
+        /* ========== Minimized Bell (Notification) ========== */
+        .sticky-bell {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 56px;
+            height: 56px;
+            background: #f7e98e;
+            border: 2px solid #e6d98c;
+            border-radius: 50%;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 9500;
+            transition: all 0.25s ease;
+            animation: pulse 2s infinite;
+        }
+
+        .sticky-bell.show {
+            display: flex;
+        }
+
+        .sticky-bell:hover {
+            transform: scale(1.12);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.28);
+            background: #f0e070;
+        }
+
+        .sticky-bell i {
+            font-size: 22px;
+            color: #5d4e00;
+        }
+
+        .sticky-bell .bell-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: #e74c3c;
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #fff;
+        }
+
+        @keyframes pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(247, 233, 142, 0.7); }
+            70%  { box-shadow: 0 0 0 12px rgba(247, 233, 142, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(247, 233, 142, 0); }
+        }
