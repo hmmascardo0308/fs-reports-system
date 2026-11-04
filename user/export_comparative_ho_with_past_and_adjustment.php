@@ -304,7 +304,6 @@ if ($gl_code_mode === 'mixed') {
     }
 
     // New GL ID => old GL IDs (for historical / pre-new-GL source data)
-    // New GL ID => old GL IDs (for historical / pre-new-GL source data)
     $mixed_id_map = [
         // ============================================================
         // MON - Monetary (1:1)
@@ -394,9 +393,9 @@ if ($gl_code_mode === 'mixed') {
         'MCA-1' => ['MCA-1'],
         'MCA-2' => ['MCA-2'],
         'EPA-1' => ['EPA-1'],
-        'COR-1' => ['COR-1'],
+        'COR-1' => ['COR-1', 'COR-3'],   // COR-1 displays COR-1 + COR-3 from past_transaction
         'COR-2' => ['COR-2'],
-        'BIL-1' => ['BIL-1'],
+        'BIL-1' => ['BIL-1', 'BIL-3'],   // BIL-1 displays BIL-1 + BIL-3 from past_transaction
         'BIL-2' => ['BIL-2'],
 
         // ============================================================
@@ -1025,6 +1024,18 @@ function get_past_transaction_data(
         })
     ));
 
+    // ========================================================
+    // COR-3 and BIL-3 must be queried so their amounts can be
+    // merged into COR-1 and BIL-1 respectively.
+    // ========================================================
+    if (!in_array('COR-3', $gl_ids_to_query, true)) {
+        $gl_ids_to_query[] = 'COR-3';
+    }
+
+    if (!in_array('BIL-3', $gl_ids_to_query, true)) {
+        $gl_ids_to_query[] = 'BIL-3';
+    }
+
     if (empty($gl_ids_to_query)) {
         return $data;
     }
@@ -1058,6 +1069,46 @@ function get_past_transaction_data(
             $raw_data[$row['gl_id']] = (float)$row['total_amount'];
         }
         mysqli_stmt_close($stmt);
+    }
+
+    // ========================================================
+    // MERGE COR-3 INTO COR-1 (past_transaction only)
+    // ========================================================
+    // COR-1 displays the combined amount of COR-1 + COR-3 from
+    // fs_reports.past_transaction.  COR-3 is removed after merging
+    // so it cannot be mapped/displayed as a separate line.
+    // ========================================================
+    if (
+        isset($raw_data['COR-3']) &&
+        $raw_data['COR-3'] != 0.0
+    ) {
+        if (!isset($raw_data['COR-1'])) {
+            $raw_data['COR-1'] = 0.0;
+        }
+
+        $raw_data['COR-1'] += (float)$raw_data['COR-3'];
+
+        unset($raw_data['COR-3']);
+    }
+
+    // ========================================================
+    // MERGE BIL-3 INTO BIL-1 (past_transaction only)
+    // ========================================================
+    // BIL-1 displays the combined amount of BIL-1 + BIL-3 from
+    // fs_reports.past_transaction.  BIL-3 is removed after merging
+    // so it cannot be mapped/displayed as a separate line.
+    // ========================================================
+    if (
+        isset($raw_data['BIL-3']) &&
+        $raw_data['BIL-3'] != 0.0
+    ) {
+        if (!isset($raw_data['BIL-1'])) {
+            $raw_data['BIL-1'] = 0.0;
+        }
+
+        $raw_data['BIL-1'] += (float)$raw_data['BIL-3'];
+
+        unset($raw_data['BIL-3']);
     }
 
     if ($gl_code_mode === 'old') {
@@ -1557,11 +1608,6 @@ function compute_table_rows_for_export(
                 'inc_dec_third' => null,
                 'percentage_third' => null
             ];
-
-            // // Add spacer after Cost of Sales/Service
-            // $final_table_rows[] = [
-            //     'is_manual_spacer' => true
-            // ];
         }
 
         // GROSS PROFIT

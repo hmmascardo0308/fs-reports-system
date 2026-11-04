@@ -2001,6 +2001,15 @@ $comps_by_desc_json =
             "
         >
 
+
+        <a
+                href="comparative_report_original_page_two.php"
+                style="text-decoration: none;"
+                class="btn-preview"
+            >
+                <i class="fa-solid fa-file"></i>
+                Consolidated Report (Page 2)
+            </a>
         
         <a
                 href="comparative_report_original_page_three.php"
@@ -2010,6 +2019,8 @@ $comps_by_desc_json =
                 <i class="fa-solid fa-file"></i>
                 Consolidated Report (Page 3)
             </a>
+
+
         
         <a
                 href="comparative_report_original_page_four.php"

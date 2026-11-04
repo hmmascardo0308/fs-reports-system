@@ -505,8 +505,11 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
 • Please upload monthly report <b>(either per region-area or per zone)</b>.
 • To track imported data per month, check <b>Monthly Data</b>
 • <b>Generating</b> comparative report <b>per branch</b> is already functional <b>(from raw data)</b>. 
+• Pages <b>2-5</b> are already updated.
 • Manual adjustment for HO allocated is already update <b>(for wHO page 5)</b>.
-• Upload previous year month transactions in <b>Previous Report</b>.
+• New format due to ML Properties will be <b>implemented soon</b>.
+<span style="text-decoration: line-through;"> Upload previous year month transactions in <b>Previous Report</b>.</span>
+• All 2025 reports are already uploaded.
 • For assistance, please contact the admin team.
         </div>
         <div class="sticky-footer">
