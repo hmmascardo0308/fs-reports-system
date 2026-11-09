@@ -1237,7 +1237,7 @@ $previous_year_display = !empty($previous_year_period) ? strtoupper(date('F Y', 
 <body>
 <main class="main-content">
     <header class="top-bar">
-        <h2><a href="fs_reports.php" style="font-size:16px;text-decoration:none;">⬅ Back</a></h2>
+        <h2><a href="user_dashboard.php" style="font-size:16px;text-decoration:none;">⬅ Back</a></h2>
         <div class="user-badge">
             <span><?= htmlspecialchars($username); ?> (<?= htmlspecialchars($user_type); ?>)</span>
             <div class="avatar"><?= strtoupper(substr($full_name, 0, 1)); ?></div>

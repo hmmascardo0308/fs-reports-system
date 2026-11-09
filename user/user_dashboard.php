@@ -123,8 +123,47 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
     <link rel="stylesheet" href="css/dashboard.css?v=<?= time(); ?>">
     <title>Dashboard | Control Panel</title>
     <link rel="icon" href="../images/MLW%20Logo.png" type="image/png"/>
-    
-   
+
+    <!-- ========== SCROLLABLE SIDEBAR DROPDOWNS ========== -->
+    <style>
+        /* Make sidebar dropdown menus scrollable when opened */
+        .sidebar .has-dropdown .dropdown-menu {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .sidebar .has-dropdown .dropdown-menu.show {
+            max-height: 60vh;      /* Adapts to screen height */
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch; /* Smooth scroll on mobile */
+        }
+
+        /* Thin, theme-matching scrollbar (WebKit browsers) */
+        .sidebar .has-dropdown .dropdown-menu::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar .has-dropdown .dropdown-menu::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .sidebar .has-dropdown .dropdown-menu::-webkit-scrollbar-thumb {
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+
+        .sidebar .has-dropdown .dropdown-menu::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Firefox scrollbar */
+        .sidebar .has-dropdown .dropdown-menu {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+        }
+    </style>
 </head>
 <body>
 
@@ -339,12 +378,12 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                         <?php if ($user_type === "admin" || $user_type === "reports") : ?>
                             <li>
                                 <a href="settings.php">
-                                    <i class="fas fa-chart-pie"></i> Comparative Report
+                                    <i class="fas fa-chart-pie"></i> Report Format (Raw Data)
                                 </a>
                             </li>
                             <li>
                                 <a href="fs_reports.php">
-                                    <i class="fas fa-file-invoice-dollar"></i> Comparative Report (With HO) / Cumulative Report
+                                    <i class="fas fa-file-invoice-dollar"></i> Report Format (HO)
                                 </a>
                             </li>
                             <li>
@@ -361,6 +400,57 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                                 </a>
                             </li>
                         <?php endif; ?>
+                    </ul>
+                </li>
+
+                <!-- ========== NEW: Generate Report Dropdown ========== -->
+                <li class="has-dropdown">
+                    <a href="javascript:void(0)" class="dropdown-trigger">
+                        <i class="fas fa-file-invoice"></i>
+                        <span>Generate Report</span>
+                        <i class="fas fa-chevron-down dropdown-icon"></i>
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a href="javascript:void(0)" onclick="openOriginalDataModal()">
+                                <i class="fas fa-file-alt"></i> Comparative Report (Original Data)
+                            </a>
+                        </li>
+                        <li>
+                            <a href="javascript:void(0)" onclick="openManualAdjustmentModal()">
+                                <i class="fas fa-edit"></i> Comparative Report (Manual Adjustment)
+                            </a>
+                        </li>
+                        <li>
+                            <a href="consolidated_with_adjustment.php">
+                                <i class="fas fa-layer-group"></i> Consolidated Report (Per Zone)
+                            </a>
+                        </li>
+                        <li>
+                            <a href="comparative_report_original_page_one.php">
+                                <i class="fas fa-file-invoice-dollar"></i> P&L STATEMENT (NATIONWIDE) Page 1
+                            </a>
+                        </li>
+                        <li>
+                            <a href="comparative_report_original_page_two.php">
+                                <i class="fas fa-file-invoice-dollar"></i> P&L STATEMENT - OPERATIONS (w/out HO EXPENSE & INCOME) Page 2
+                            </a>
+                        </li>
+                        <li>
+                            <a href="comparative_report_original_page_three.php">
+                                <i class="fas fa-file-invoice-dollar"></i> COMPARATIVE P&L STATEMENT Page 3
+                            </a>
+                        </li>
+                        <li>
+                            <a href="comparative_report_original_page_four.php">
+                                <i class="fas fa-file-invoice-dollar"></i> CONSOLIDATED P&L STATEMENT (NATIONWIDE, LNCR, VISMIN) Page 4
+                            </a>
+                        </li>
+                        <li>
+                            <a href="comparative_report_original_ho_with_past_and_adjustment.php">
+                                <i class="fas fa-file-invoice-dollar"></i> COMPARATIVE P&L STATEMENT - w/ ALLOCATED HO Page 5
+                            </a>
+                        </li>
                     </ul>
                 </li>
             <?php endif; ?>
@@ -564,6 +654,48 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
         </div>
     </div>
 
+    <!-- Comparative Report (Original Data) Selection Modal -->
+    <div id="originalDataModal" class="password-modal">
+        <div class="password-modal-content" style="max-width: 420px; text-align: center; position: relative;">
+            <span onclick="closeOriginalDataModal()" style="position: absolute; right: 15px; top: 15px; cursor: pointer; font-size: 24px; color: #888; line-height: 1;">&times;</span>
+            <h2 style="margin-top: 10px; margin-bottom: 20px; color: #333; font-size: 1.4rem;">
+                <i class="fas fa-file-alt" style="color: #007bff; margin-right: 10px;"></i>
+                Comparative Report (Original Data)
+            </h2>
+            <p style="margin-bottom: 25px; color: #666; font-size: 0.95rem;">Select the report type:</p>
+            
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <a href="comparative_report_original.php" class="btn" style="background-color: #28a745; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; display: block;">
+                    <i class="fas fa-map-marked-alt" style="margin-right: 8px;"></i> Per Region-Area
+                </a>
+                <a href="comparative_report_original_raw.php" class="btn" style="background-color: #17a2b8; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; display: block;">
+                    <i class="fas fa-globe" style="margin-right: 8px;"></i> Per Zone
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comparative Report (Manual Adjustment) Selection Modal -->
+    <div id="manualAdjustmentModal" class="password-modal">
+        <div class="password-modal-content" style="max-width: 420px; text-align: center; position: relative;">
+            <span onclick="closeManualAdjustmentModal()" style="position: absolute; right: 15px; top: 15px; cursor: pointer; font-size: 24px; color: #888; line-height: 1;">&times;</span>
+            <h2 style="margin-top: 10px; margin-bottom: 20px; color: #333; font-size: 1.4rem;">
+                <i class="fas fa-edit" style="color: #6f42c1; margin-right: 10px;"></i>
+                Comparative Report (Manual Adjustment)
+            </h2>
+            <p style="margin-bottom: 25px; color: #666; font-size: 0.95rem;">Select the report type:</p>
+            
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <a href="manual_adjustment_new.php" class="btn" style="background-color: #28a745; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; display: block;">
+                    <i class="fas fa-map-marked-alt" style="margin-right: 8px;"></i> Per Region-Area
+                </a>
+                <a href="manual_adjustment_new_raw.php" class="btn" style="background-color: #17a2b8; color: white; text-decoration: none; padding: 12px; border-radius: 6px; font-weight: 600; display: block;">
+                    <i class="fas fa-globe" style="margin-right: 8px;"></i> Per Zone
+                </a>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Toggle password visibility
         function togglePassword(inputId, button) {
@@ -599,6 +731,21 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
 
         function closeReportedTransactionsModal() {
             document.getElementById('reportedTransactionsModal').classList.remove('show');
+        }
+
+        // ========== NEW: Generate Report Modals ==========
+        function openOriginalDataModal() {
+            document.getElementById('originalDataModal').classList.add('show');
+        }
+        function closeOriginalDataModal() {
+            document.getElementById('originalDataModal').classList.remove('show');
+        }
+
+        function openManualAdjustmentModal() {
+            document.getElementById('manualAdjustmentModal').classList.add('show');
+        }
+        function closeManualAdjustmentModal() {
+            document.getElementById('manualAdjustmentModal').classList.remove('show');
         }
 
         // ========== Sticky Note Controls ==========
