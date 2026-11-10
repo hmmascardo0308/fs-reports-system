@@ -12,6 +12,8 @@
 // Updated: Two views only - grouped (collapsed) and normal (expanded)
 // Updated: Alternating row colors for sort_order summaries (even = color, odd = no color)
 // Updated: GL ID mapping with source-to-target for manual adjustments
+// Updated: ML Properties ( Realty & Brokerage ) shown as its own revenue group
+//          (MLP-1 / sort_order 30, right after sort_order 7) in New GL from August 2026
 session_start();
 require_once __DIR__ . '/../config/config.php';
 
@@ -44,6 +46,17 @@ function isApril2026OrLater(string $month): bool {
     return $month_time >= $cutoff;
 }
 
+// Helper function to check if a month is August 2026 or later.
+// From August 2026, ML Properties ( Realty & Brokerage ) is shown as its
+// own group (sort_order 30 / MLP-1) instead of inside Total Other Income
+// (sort_order 23 / TOI-32).
+function isAugust2026OrLater(string $month): bool {
+    if (empty($month)) return false;
+    $cutoff = strtotime('2026-08-01');
+    $month_time = strtotime($month . '-01');
+    return $month_time >= $cutoff;
+}
+
 $show_error = false;
 $valid_filters = false;
 
@@ -60,6 +73,88 @@ if (!empty($selected_period)) {
     
     if (!$show_error) {
         $valid_filters = true;
+    }
+}
+
+// ============================================================
+// ML PROPERTIES GROUP FLAG
+// ============================================================
+// When the selected period is August 2026 or later (New GL):
+//   - TOI-32 "ML Properties ( Realty & Brokerage )" is HIDDEN from
+//     sort_order 23 (Total Other Income)
+//   - MLP-1 (sort_order 30, "ML Properties") is SHOWN as its own group
+//     right after sort_order 7, and is included in TOTAL REVENUES
+//   - TOI-32 amounts are folded into MLP-1
+// Otherwise ML Properties stays inside Total Other Income and the
+// sort_order 30 group is never shown.
+// ============================================================
+$ml_properties_group_active = (
+    $gl_code_mode === 'new' &&
+    isAugust2026OrLater($selected_period)
+);
+
+// ============================================================
+// GET GL MAPPING based on GL Code Mode
+// ============================================================
+$gl_mapping = [];
+$gl_descriptions = [];
+$sort_order_descriptions = [];
+$special_keys = [];
+$gl_id_by_key = [];   // sort_order|sub_order => gl_id
+
+$table_name = ($gl_code_mode === 'old') ? 'fs_reports.gl_codes_ho' : 'fs_reports.new_gl_codes_ho';
+
+$gl_structure_query = "
+    SELECT DISTINCT sort_order, sub_order, gl_id, gl_code, gl_description_comparative, description
+    FROM {$table_name}
+    WHERE sort_order IS NOT NULL AND sub_order IS NOT NULL
+    ORDER BY sort_order ASC, sub_order ASC
+";
+
+$gl_structure_result = mysqli_query($conn, $gl_structure_query);
+if ($gl_structure_result) {
+    while ($row = mysqli_fetch_assoc($gl_structure_result)) {
+        $key = $row['sort_order'] . '|' . $row['sub_order'];
+        $gl_id = trim((string)($row['gl_id'] ?? ''));
+
+        // Kept for ALL rows (incl. the hidden MLP-1 / TOI-32 row) so both
+        // IDs are still queried by the data function.
+        $gl_id_by_key[$key] = $gl_id;
+
+        // ML Properties ( Realty & Brokerage ) must only be shown in ONE place:
+        //  - Not active: inside Total Other Income (TOI-32 / sort_order 23).
+        //    MLP-1 / sort_order 30 is hidden.
+        //  - Active (New GL, August 2026+): as its own group
+        //    (MLP-1 / sort_order 30). TOI-32 is hidden from sort_order 23.
+        if (
+            ($gl_id === 'MLP-1' || (int)($row['sort_order'] ?? 0) === 30) &&
+            !$ml_properties_group_active
+        ) {
+            continue;
+        }
+
+        if ($gl_id === 'TOI-32' && $ml_properties_group_active) {
+            continue;
+        }
+
+        if ($gl_id === 'INJ-2') {
+            $special_keys[] = $key;
+        }
+
+        if (!isset($gl_mapping[$key])) {
+            $gl_mapping[$key] = [];
+            $gl_descriptions[$key] = $row['gl_description_comparative'] ?? '';
+        }
+
+        // Keep numerical gl_code for any residual lookups (rarely used now)
+        $code = trim((string)($row['gl_code'] ?? ''));
+        if ($code !== '' && !in_array($code, $gl_mapping[$key], true)) {
+            $gl_mapping[$key][] = $code;
+        }
+        
+        if (!isset($sort_order_descriptions[$row['sort_order']]) && !empty($row['description'])) {
+            $sort_order_descriptions[$row['sort_order']] = $row['description'];
+        }
     }
 }
 
@@ -151,53 +246,6 @@ $new_gl_mapping = [
     'INS-13' => [],
     'INS-14' => [],
 ];
-
-// ============================================================
-// GET GL MAPPING based on GL Code Mode
-// ============================================================
-$gl_mapping = [];
-$gl_descriptions = [];
-$sort_order_descriptions = [];
-$special_keys = [];
-$gl_id_by_key = [];   // sort_order|sub_order => gl_id
-
-$table_name = ($gl_code_mode === 'old') ? 'fs_reports.gl_codes_ho' : 'fs_reports.new_gl_codes_ho';
-
-$gl_structure_query = "
-    SELECT DISTINCT sort_order, sub_order, gl_id, gl_code, gl_description_comparative, description
-    FROM {$table_name}
-    WHERE sort_order IS NOT NULL AND sub_order IS NOT NULL
-    ORDER BY sort_order ASC, sub_order ASC
-";
-
-$gl_structure_result = mysqli_query($conn, $gl_structure_query);
-if ($gl_structure_result) {
-    while ($row = mysqli_fetch_assoc($gl_structure_result)) {
-        $key = $row['sort_order'] . '|' . $row['sub_order'];
-        $gl_id = $row['gl_id'] ?? '';
-
-        $gl_id_by_key[$key] = $gl_id;
-
-        if ($gl_id === 'INJ-2') {
-            $special_keys[] = $key;
-        }
-
-        if (!isset($gl_mapping[$key])) {
-            $gl_mapping[$key] = [];
-            $gl_descriptions[$key] = $row['gl_description_comparative'] ?? '';
-        }
-
-        // Keep numerical gl_code for any residual lookups (rarely used now)
-        $code = trim((string)($row['gl_code'] ?? ''));
-        if ($code !== '' && !in_array($code, $gl_mapping[$key], true)) {
-            $gl_mapping[$key][] = $code;
-        }
-        
-        if (!isset($sort_order_descriptions[$row['sort_order']]) && !empty($row['description'])) {
-            $sort_order_descriptions[$row['sort_order']] = $row['description'];
-        }
-    }
-}
 
 /**
  * Fetch Head Office (manual adjustment) value for sort_order=26, sub_order=1
@@ -462,7 +510,8 @@ function compute_table_rows_for_mainzone(
     array $gl_id_by_key,
     array $old_gl_mapping = [],
     array $new_gl_mapping = [],
-    bool $use_real_data = true
+    bool $use_real_data = true,
+    bool $ml_properties_group = false
 ): array {
     $period_data = [];
     if ($use_real_data && !empty($selected_period)) {
@@ -477,7 +526,24 @@ function compute_table_rows_for_mainzone(
         );
     }
 
-    // Fetch Head Office value for sort_order=28/sub_order=1 (old GL) or sort_order=29/sub_order=1 (new GL)
+    // ML PROPERTIES: fold TOI-32 into MLP-1 so the amount is shown in the
+    // separate ML Properties group and NOT inside Total Other Income.
+    if ($ml_properties_group) {
+        $mlp_src = $period_data['MLP-1'] ?? ['mlfsi' => 0.0, 'jewelers' => 0.0];
+        $toi_src = $period_data['TOI-32'] ?? ['mlfsi' => 0.0, 'jewelers' => 0.0];
+
+        $mlp_mlfsi = (float)$mlp_src['mlfsi'] + (float)$toi_src['mlfsi'];
+        $mlp_jew   = (float)$mlp_src['jewelers'] + (float)$toi_src['jewelers'];
+
+        $period_data['MLP-1'] = [
+            'mlfsi'    => $mlp_mlfsi,
+            'jewelers' => $mlp_jew,
+            'total'    => $mlp_mlfsi + $mlp_jew,
+        ];
+        unset($period_data['TOI-32']);
+    }
+
+    // Fetch Head Office value for sort_order=28 / sub_order=1 (old GL) or sort_order=29 / sub_order=1 (new GL)
     $head_office_tax = 0.0;
     if ($use_real_data && !empty($selected_period)) {
         $head_office_tax = get_head_office_manual_adjustment($conn, $mainzone, $selected_period);
@@ -544,6 +610,38 @@ function compute_table_rows_for_mainzone(
             $grouped_rows[$sort_order] = [];
         }
         $grouped_rows[$sort_order][] = $row;
+    }
+
+    // ML Properties group (sort_order 30) only exists when it is active.
+    // Safety net: never show it (e.g. at the bottom) otherwise.
+    if (!$ml_properties_group && isset($grouped_rows[30])) {
+        unset($grouped_rows[30]);
+    }
+
+    // ML PROPERTIES: place sort_order 30 right after sort_order 7
+    // (it is the last number in the structure, so by default it would
+    // be rendered at the very bottom).
+    if ($ml_properties_group && isset($grouped_rows[30])) {
+        $reordered_groups = [];
+
+        foreach ($grouped_rows as $group_sort_order => $group_rows) {
+            if ((int)$group_sort_order === 30) {
+                continue;
+            }
+
+            $reordered_groups[$group_sort_order] = $group_rows;
+
+            if ((int)$group_sort_order === 7) {
+                $reordered_groups[30] = $grouped_rows[30];
+            }
+        }
+
+        // Safety: if sort_order 7 was not found, keep 30 at the end.
+        if (!isset($reordered_groups[30])) {
+            $reordered_groups[30] = $grouped_rows[30];
+        }
+
+        $grouped_rows = $reordered_groups;
     }
 
     // ============================================================
@@ -631,7 +729,12 @@ function compute_table_rows_for_mainzone(
         $group_total_with_head = $total_period_mlfsi + $total_period_jewelers + $total_head_office;
 
         // Revenue detail rows (1 to revenue_max_sort_order)
-        if ((int)$sort_order >= 1 && (int)$sort_order <= $revenue_max_sort_order) {
+        // ML Properties (sort_order 30) is a revenue group when active.
+        $is_revenue_group = (
+            ((int)$sort_order >= 1 && (int)$sort_order <= $revenue_max_sort_order) ||
+            ($ml_properties_group && (int)$sort_order === 30)
+        );
+        if ($is_revenue_group) {
             $rev_mlfsi += $total_period_mlfsi;
             $rev_jew += $total_period_jewelers;
             $rev_tot += $group_total_with_head;
@@ -762,8 +865,14 @@ function compute_table_rows_for_mainzone(
     // ============================================================
     
     // STEP 1: Revenue detail rows (sort_order 1 to revenue_max_sort_order)
+    // (+ ML Properties, sort_order 30, which was moved right after sort_order 7)
     foreach ($grouped_rows as $sort_order => $rows) {
-        if ((int)$sort_order >= 1 && (int)$sort_order <= $revenue_max_sort_order) {
+        $is_revenue_group_step = (
+            ((int)$sort_order >= 1 && (int)$sort_order <= $revenue_max_sort_order) ||
+            ($ml_properties_group && (int)$sort_order === 30)
+        );
+
+        if ($is_revenue_group_step) {
             // Check if this sort order should hide detail rows
             $hide_details = false;
             if ($gl_code_mode === 'old' && ((int)$sort_order == 10 || (int)$sort_order == 13)) {
@@ -1083,7 +1192,8 @@ $tables[] = [
         $gl_id_by_key,
         $old_gl_mapping,
         $new_gl_mapping,
-        $valid_filters
+        $valid_filters,
+        $ml_properties_group_active
     ),
 ];
 
@@ -1105,7 +1215,8 @@ foreach ($specific_mainzones as $mz_name) {
             $gl_id_by_key,
             $old_gl_mapping,
             $new_gl_mapping,
-            $valid_filters
+            $valid_filters,
+            $ml_properties_group_active
         ),
     ];
 }
@@ -1432,6 +1543,13 @@ $found_total_revenues = false;
 // Track sort_order for alternating colors
 $sort_order_counter = 0;
 
+// Alternate shading of the revenue sort_order summaries follows the DISPLAY
+// position (per table), not the sort_order number, so ML Properties moved
+// below sort_order 7 does not break the pattern. Without ML Properties this
+// is identical to the old even/odd sort_order behaviour.
+$revenue_max_for_xlsx = ($gl_code_mode === 'old') ? 22 : 23;
+$revenue_summary_position = [0, 0, 0];
+
 for ($r = 0; $r < $max_data_rows; $r++) {
 
     foreach ($tables as $table_index => $table) {
@@ -1570,14 +1688,29 @@ for ($r = 0; $r < $max_data_rows; $r++) {
             if ($is_sort_order_summary) {
                 // Get the sort_order number
                 $sort_order_num = (int)$row['sort_order'];
+
+                // Revenue summaries (1..revenue_max, plus ML Properties = 30 when
+                // it is shown on its own) alternate by DISPLAY position; all other
+                // sort_order summaries keep the even-sort_order rule.
+                $is_revenue_summary_row = (
+                    ($sort_order_num >= 1 && $sort_order_num <= $revenue_max_for_xlsx) ||
+                    ($ml_properties_group_active && $sort_order_num === 30)
+                );
+
+                if ($is_revenue_summary_row) {
+                    $revenue_summary_position[$table_index]++;
+                    $apply_alt_fill = ($revenue_summary_position[$table_index] % 2 == 0);
+                } else {
+                    $apply_alt_fill = ($sort_order_num % 2 == 0);
+                }
                 
-                // Only apply background for even sort_order numbers
-                if ($sort_order_num % 2 == 0) {
+                // Only apply background for the "even" rows
+                if ($apply_alt_fill) {
                     $sheet->getStyle($start_col . $current_row . ':' . $end_col . $current_row)->applyFromArray([
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FDE9D9']]
                     ]);
                 }
-                // Odd sort_order numbers get no background (default)
+                // Odd rows get no background (default)
             }
 
             $sub_order_value = $row['sub_order'] ?? '';
@@ -1647,6 +1780,7 @@ $all_rows = $current_row;
 
 // Group revenue detail rows under the REVENUES header (Level 2)
 // This is the primary grouping - only for rows above TOTAL REVENUES
+// (ML Properties rows sit before TOTAL REVENUES, so they are grouped too)
 $row_num = 10;
 $in_revenue_section = false;
 

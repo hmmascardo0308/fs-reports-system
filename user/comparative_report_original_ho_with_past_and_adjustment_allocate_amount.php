@@ -328,6 +328,22 @@ function isApril2026OrLater(string $month): bool
     return $month_time >= $cutoff;
 }
 
+// Helper function to check if a month is August 2026 or later.
+// From August 2026, ML Properties ( Realty & Brokerage ) is shown as its
+// own group (sort_order 30 / MLP-1) instead of inside Total Other Income
+// (sort_order 23 / TOI-32).
+function isAugust2026OrLater(string $month): bool
+{
+    if (empty($month)) {
+        return false;
+    }
+
+    $cutoff = strtotime('2026-08-01');
+    $month_time = strtotime($month . '-01');
+
+    return $month_time >= $cutoff;
+}
+
 // Helper function to get sort order ranges based on GL code mode
 function getSortOrderRanges(string $gl_code_mode): array
 {
@@ -615,6 +631,26 @@ if ($years_res) {
 }
 
 // ============================================================
+// ML PROPERTIES GROUP FLAG
+// ============================================================
+// When the Primary OR Previous period is August 2026 or later (New / Mix GL):
+//   - TOI-32 "ML Properties ( Realty & Brokerage )" is HIDDEN from
+//     sort_order 23 (Total Other Income)
+//   - MLP-1 (sort_order 30, "ML Properties") is SHOWN as its own group
+//     right after sort_order 7, and is included in TOTAL REVENUES
+//   - TOI-32 amounts from any new-GL period are folded into MLP-1
+// Otherwise the report behaves exactly as before.
+// ============================================================
+
+$ml_properties_group_active = (
+    $gl_code_mode !== 'old' &&
+    (
+        isAugust2026OrLater($primary_period) ||
+        isAugust2026OrLater($previous_period)
+    )
+);
+
+// ============================================================
 // GET GL MAPPING BASED ON GL CODE MODE
 // ============================================================
 
@@ -843,6 +879,11 @@ if ($gl_code_mode === 'mixed') {
     'TOI-34' => ['TOI-32'],  // ← old TOI-32
 
     // ============================================================
+    // MLP - ML Properties (sort_order 30, from August 2026)
+    // ============================================================
+    'MLP-1' => [],           // new-only; fed from TOI-32 in fetch_period_data
+
+    // ============================================================
     // COS - Cost of Sales
     // ============================================================
     'COS-1' => ['COS-1'],
@@ -940,13 +981,33 @@ if ($gl_structure_result) {
             '|' .
             $row['sub_order'];
 
-        $gl_id = $row['gl_id'] ?? '';
+        $gl_id = trim((string)($row['gl_id'] ?? ''));
 
         /*
          * NEW:
          * Save GL ID for this row.
+         * (Kept for ALL rows, including the hidden MLP-1 / TOI-32 row,
+         * so both IDs are still queried by the data functions.)
          */
         $gl_id_by_key[$key] = $gl_id;
+
+        /*
+         * ML Properties ( Realty & Brokerage ) must only be shown in ONE place:
+         *  - Before August 2026 (or Old GL): inside Total Other Income
+         *    (TOI-32 / sort_order 23). MLP-1 / sort_order 30 is hidden.
+         *  - From August 2026 (New / Mix GL): as its own group
+         *    (MLP-1 / sort_order 30). TOI-32 is hidden from sort_order 23.
+         */
+        if (
+            ($gl_id === 'MLP-1' || (int)($row['sort_order'] ?? 0) === 30) &&
+            !$ml_properties_group_active
+        ) {
+            continue;
+        }
+
+        if ($gl_id === 'TOI-32' && $ml_properties_group_active) {
+            continue;
+        }
 
         if ($gl_id === 'INJ-2') {
             $special_keys[] = $key;
@@ -1940,7 +2001,8 @@ function compute_table_rows_for_region_area(
     array $mixed_id_map = [],
     array $old_gl_mapping = [],
     array $new_gl_mapping = [],
-    bool $use_real_data = true
+    bool $use_real_data = true,
+    bool $ml_properties_group = false
 ): array {
 
     // ========================================================
@@ -1974,7 +2036,8 @@ function compute_table_rows_for_region_area(
         $mixed_id_map,
         $old_gl_mapping,
         $new_gl_mapping,
-        $use_real_data
+        $use_real_data,
+        $ml_properties_group
     ): array {
         if (!$use_real_data || empty($period)) {
             return [];
@@ -1983,7 +2046,8 @@ function compute_table_rows_for_region_area(
         $year = (int)explode('-', $period)[0];
 
         if ($year >= 2026) {
-            return get_manual_adjustment_data(
+
+            $data = get_manual_adjustment_data(
                 $conn,
                 $period,
                 $gl_id_by_key,
@@ -1992,6 +2056,30 @@ function compute_table_rows_for_region_area(
                 $old_gl_mapping,
                 $new_gl_mapping
             );
+
+            // ------------------------------------------------
+            // ML PROPERTIES: fold TOI-32 into MLP-1
+            // ------------------------------------------------
+            // When the report is using the separate ML Properties
+            // group (Primary period August 2026+), TOI-32 is hidden
+            // from Total Other Income, so its amount must be shown
+            // under MLP-1 for EVERY new-GL period (including the
+            // Previous period) to keep the comparison like-for-like.
+            // Only new-GL months (April 2026+) are folded; in the old
+            // GL, TOI-32 is a different account.
+            // ------------------------------------------------
+            if (
+                $ml_properties_group &&
+                isApril2026OrLater($period)
+            ) {
+                $data['MLP-1'] =
+                    (float)($data['MLP-1'] ?? 0) +
+                    (float)($data['TOI-32'] ?? 0);
+
+                unset($data['TOI-32']);
+            }
+
+            return $data;
         }
 
         // Historical (≤ 2025)
@@ -2329,6 +2417,46 @@ function compute_table_rows_for_region_area(
             $row;
     }
 
+    // ML Properties group (sort_order 30) only exists when it is active.
+    // Safety net: even if its row slipped through the structure query,
+    // never show it (e.g. at the bottom after Net Income) otherwise.
+    if (!$ml_properties_group && isset($grouped_rows[30])) {
+        unset($grouped_rows[30]);
+    }
+
+    // ========================================================
+    // ML PROPERTIES: place sort_order 30 right after sort_order 7
+    // ========================================================
+    // sort_order 30 is the last number in the structure table, so by
+    // default it would be rendered at the very bottom (after Provision
+    // on Income Tax). Move it directly below sort_order 7 (Yadea Sales).
+    // ========================================================
+    if ($ml_properties_group && isset($grouped_rows[30])) {
+
+        $reordered_groups = [];
+
+        foreach ($grouped_rows as $group_sort_order => $group_rows) {
+
+            if ((int)$group_sort_order === 30) {
+                continue;
+            }
+
+            $reordered_groups[$group_sort_order] = $group_rows;
+
+            if ((int)$group_sort_order === 7) {
+                $reordered_groups[30] = $grouped_rows[30];
+            }
+        }
+
+        // Safety: if sort_order 7 was not found, keep 30 at the end
+        // instead of losing it.
+        if (!isset($reordered_groups[30])) {
+            $reordered_groups[30] = $grouped_rows[30];
+        }
+
+        $grouped_rows = $reordered_groups;
+    }
+
     $final_table_rows = [];
 
     // ========================================================
@@ -2495,11 +2623,19 @@ function compute_table_rows_for_region_area(
         
         $revenue_start = $ranges['revenue_start'];
         $revenue_end = $ranges['revenue_end'];
+
+        // ML Properties (sort_order 30) is a revenue group when active.
+        $is_revenue_group =
+            (
+                (int)$sort_order >= $revenue_start &&
+                (int)$sort_order <= $revenue_end
+            ) ||
+            (
+                $ml_properties_group &&
+                (int)$sort_order === 30
+            );
         
-        if (
-            (int)$sort_order >= $revenue_start &&
-            (int)$sort_order <= $revenue_end
-        ) {
+        if ($is_revenue_group) {
 
             $rev_tot_p +=
                 $total_primary_total;
@@ -3390,7 +3526,8 @@ $table_rows =
         $mixed_id_map,
         $old_gl_mapping,
         $new_gl_mapping,
-        $valid_filters
+        $valid_filters,
+        $ml_properties_group_active
     );
 
 ?>
@@ -3709,10 +3846,13 @@ $table_rows =
         <!-- TABLE -->
 
         <div class="region-block">
+
             <div class="tables-scroll">
+
                 <div class="tables-grid">
+
                     <div class="table-container">
- 
+
                         <table class="data-table">
 
                             <thead>
@@ -4919,6 +5059,17 @@ document.addEventListener(
                         hideDetails = [11, 14];
                     }
 
+                    // A sort_order belongs to the collapsible revenue area if it is
+                    // 1..revenueEnd, OR it is sort_order 30 (ML Properties, which is
+                    // only rendered in New/Mix mode from August 2026 and is a revenue
+                    // group placed right after sort_order 7).
+                    const inCollapseRange = function (n) {
+                        return !isNaN(n) && (
+                            (n >= 1 && n <= revenueEnd) ||
+                            (mode !== 'old' && n === 30)
+                        );
+                    };
+
                     rows.forEach(
                         row => {
 
@@ -4944,9 +5095,7 @@ document.addEventListener(
 
                             // Determine if this is in the collapse range
                             const isInCollapseRange =
-                                !isNaN(sortNum) &&
-                                sortNum >= 1 &&
-                                sortNum <= revenueEnd;
+                                inCollapseRange(sortNum);
 
                             // Handle detail rows (sub-rows under each sort order)
                             if (
@@ -4968,9 +5117,7 @@ document.addEventListener(
                                     );
 
                                 if (
-                                    !isNaN(spacerNum) &&
-                                    spacerNum >= 1 &&
-                                    spacerNum <= revenueEnd
+                                    inCollapseRange(spacerNum)
                                 ) {
 
                                     row.style.display =
@@ -5063,6 +5210,11 @@ document.addEventListener(
         const REPORT_COS_SORT_ORDER = <?= json_encode($cos_sort_order) ?>;
         const REPORT_COS_SECTION_IDS = <?= json_encode($cos_section_ids) ?>;
         const HAS_THIRD_PERIOD = <?= json_encode(!empty($third_period)) ?>;
+
+        // ML Properties (sort_order 30) is a separate revenue group
+        // from August 2026 (New / Mix GL).
+        const REPORT_ML_PROPERTIES_GROUP = <?= json_encode($ml_properties_group_active) ?>;
+        const REPORT_ML_PROPERTIES_SORT_ORDER = 30;
 
         // Track unsaved client-side edits (no server save yet)
         let hasUnsavedEdits = false;
@@ -5353,6 +5505,18 @@ document.addEventListener(
                 rev.primary += a.primary;
                 rev.previous += a.previous;
                 rev.third += a.third;
+            }
+
+            // ML Properties (sort_order 30) is part of Total Revenues
+            // when it is shown as its own group.
+            if (REPORT_ML_PROPERTIES_GROUP) {
+                const ml = getSummaryAmountBySortOrder(
+                    tbody,
+                    REPORT_ML_PROPERTIES_SORT_ORDER
+                );
+                rev.primary += ml.primary;
+                rev.previous += ml.previous;
+                rev.third += ml.third;
             }
 
             const totalRevRow = findNamedSummaryRow(tbody, 'TOTAL REVENUES');

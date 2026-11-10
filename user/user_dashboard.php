@@ -124,7 +124,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
     <title>Dashboard | Control Panel</title>
     <link rel="icon" href="../images/MLW%20Logo.png" type="image/png"/>
 
-    <!-- ========== SCROLLABLE SIDEBAR DROPDOWNS ========== -->
     <style>
         /* Make sidebar dropdown menus scrollable when opened */
         .sidebar .has-dropdown .dropdown-menu {
@@ -134,13 +133,12 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
         }
 
         .sidebar .has-dropdown .dropdown-menu.show {
-            max-height: 60vh;      /* Adapts to screen height */
+            max-height: 60vh;
             overflow-y: auto;
             overflow-x: hidden;
-            -webkit-overflow-scrolling: touch; /* Smooth scroll on mobile */
+            -webkit-overflow-scrolling: touch;
         }
 
-        /* Thin, theme-matching scrollbar (WebKit browsers) */
         .sidebar .has-dropdown .dropdown-menu::-webkit-scrollbar {
             width: 6px;
         }
@@ -158,11 +156,200 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
             background-color: rgba(255, 255, 255, 0.5);
         }
 
-        /* Firefox scrollbar */
         .sidebar .has-dropdown .dropdown-menu {
             scrollbar-width: thin;
             scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
         }
+
+      /* ========== ADMIN CHAT BOT STYLES (Red Theme) ========== */
+.admin-chat-button {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    width: 58px;
+    height: 58px;
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(220, 38, 38, 0.4);
+    z-index: 9998;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.admin-chat-button:hover {
+    transform: scale(1.08);
+    box-shadow: 0 8px 25px rgba(220, 38, 38, 0.5);
+}
+.chat-unread-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #991b1b;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.admin-chat-panel {
+    position: fixed;
+    bottom: 95px;
+    right: 25px;
+    width: 370px;
+    max-height: 540px;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+    display: none;
+    flex-direction: column;
+    z-index: 9999;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+}
+.admin-chat-panel.open {
+    display: flex;
+}
+
+.chat-header {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    color: white;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.chat-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.chat-header-left i {
+    font-size: 22px;
+}
+.chat-header-left small {
+    display: block;
+    opacity: 0.85;
+    font-size: 12px;
+}
+.chat-close-btn {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    opacity: 0.85;
+}
+.chat-close-btn:hover { opacity: 1; }
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    background: #fef2f2;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 300px;
+    max-height: 360px;
+}
+
+/* ===== BUBBLES (Red Theme) ===== */
+.chat-bubble {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.5;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.chat-bubble.user {
+    background: #dc2626;
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+}
+
+.chat-bubble.bot {
+    background: #ffffff;
+    color: #1e293b;
+    align-self: flex-start;
+    border: 1px solid #fecaca;
+    border-bottom-left-radius: 4px;
+}
+
+.chat-bubble.admin {
+    background: #fee2e2;
+    color: #7f1d1d;
+    align-self: flex-start;
+    border: 1px solid #fca5a5;
+    border-left: 4px solid #dc2626;
+    border-bottom-left-radius: 4px;
+}
+
+.chat-meta {
+    font-size: 11px;
+    opacity: 0.7;
+    margin-top: 5px;
+    display: block;
+}
+
+.chat-bubble.user .chat-meta {
+    color: rgba(255,255,255,0.85);
+}
+
+.chat-input-area {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    border-top: 1px solid #e5e7eb;
+    background: white;
+}
+.chat-input-area input {
+    flex: 1;
+    border: 1px solid #d1d5db;
+    border-radius: 20px;
+    padding: 10px 16px;
+    font-size: 14px;
+    outline: none;
+}
+.chat-input-area input:focus {
+    border-color: #dc2626;
+}
+.chat-input-area button {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: none;
+    background: #dc2626;
+    color: white;
+    cursor: pointer;
+    font-size: 16px;
+}
+.chat-input-area button:hover {
+    background: #b91c1c;
+}
+
+.chat-welcome {
+    text-align: center;
+    color: #64748b;
+    font-size: 13px;
+    padding: 20px 10px;
+}
+.chat-welcome i {
+    color: #dc2626 !important;
+}
     </style>
 </head>
 <body>
@@ -403,7 +590,7 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                     </ul>
                 </li>
 
-                <!-- ========== NEW: Generate Report Dropdown ========== -->
+                <!-- Generate Report Dropdown -->
                 <li class="has-dropdown">
                     <a href="javascript:void(0)" class="dropdown-trigger">
                         <i class="fas fa-file-invoice"></i>
@@ -451,6 +638,11 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                                 <i class="fas fa-file-invoice-dollar"></i> COMPARATIVE P&L STATEMENT - w/ ALLOCATED HO Page 5
                             </a>
                         </li>
+                        <li>
+                            <a href="comparative_report_original_page_six.php">
+                                <i class="fas fa-file-invoice-dollar"></i> COMPARATIVE GROSS INCOME REPORT Page 6
+                            </a>
+                        </li>
                     </ul>
                 </li>
             <?php endif; ?>
@@ -462,6 +654,13 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                 $count_result = $conn->query($count_query);
                 if ($count_result && $row = $count_result->fetch_assoc()) {
                     $pending_count = $row['total'];
+                }
+
+                // Unread admin messages count
+                $unread_msg_count = 0;
+                $msg_count_result = $conn->query("SELECT COUNT(*) as total FROM fs_admin_messages WHERE is_from_admin = 0 AND is_read = 0");
+                if ($msg_count_result && $row = $msg_count_result->fetch_assoc()) {
+                    $unread_msg_count = $row['total'];
                 }
                 ?>
                 <li class="has-dropdown">
@@ -481,6 +680,14 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                                 <i class="fas fa-key"></i> Password Reset Requests
                                 <?php if ($pending_count > 0): ?>
                                     <span class="pending-badge"><?php echo $pending_count; ?></span>
+                                <?php endif; ?>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="admin_messages.php">
+                                <i class="fas fa-comments"></i> Admin Messages
+                                <?php if ($unread_msg_count > 0): ?>
+                                    <span class="pending-badge"><?php echo $unread_msg_count; ?></span>
                                 <?php endif; ?>
                             </a>
                         </li>
@@ -576,7 +783,7 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
         <?php endif; ?>
     </main>
 
-    <!-- ========== ADMIN STICKY NOTE (hardcoded) ========== -->
+    <!-- ========== ADMIN STICKY NOTE ========== -->
     <div id="adminStickyNote" class="admin-sticky-note">
         <div class="sticky-header">
             <div class="sticky-title">
@@ -607,7 +814,7 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
         </div>
     </div>
 
-    <!-- Minimized Bell (appears when sticky is minimized) -->
+    <!-- Minimized Bell -->
     <div id="stickyBell" class="sticky-bell" onclick="expandSticky()" title="Open Admin Reminder">
         <i class="fas fa-bell"></i>
         <span class="bell-badge">1</span>
@@ -696,6 +903,38 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
         </div>
     </div>
 
+    <!-- ========== ADMIN CHAT BOT ========== -->
+    <div id="adminChatButton" class="admin-chat-button" onclick="toggleAdminChat()">
+        <i class="fas fa-comments"></i>
+        <span id="chatUnreadBadge" class="chat-unread-badge" style="display:none;">0</span>
+    </div>
+
+    <div id="adminChatPanel" class="admin-chat-panel">
+        <div class="chat-header">
+            <div class="chat-header-left">
+                <i class="fas fa-robot"></i>
+                <div>
+                    <strong>FS Assistant</strong>
+                    <small>Ask me or talk to admin</small>
+                </div>
+            </div>
+            <button class="chat-close-btn" onclick="toggleAdminChat()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div id="chatMessages" class="chat-messages">
+            <!-- messages loaded here -->
+        </div>
+
+        <div class="chat-input-area">
+            <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off">
+            <button onclick="sendChatMessage()">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+
     <script>
         // Toggle password visibility
         function togglePassword(inputId, button) {
@@ -733,7 +972,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
             document.getElementById('reportedTransactionsModal').classList.remove('show');
         }
 
-        // ========== NEW: Generate Report Modals ==========
         function openOriginalDataModal() {
             document.getElementById('originalDataModal').classList.add('show');
         }
@@ -748,11 +986,10 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
             document.getElementById('manualAdjustmentModal').classList.remove('show');
         }
 
-        // ========== Sticky Note Controls ==========
+        // Sticky Note Controls
         function minimizeSticky() {
             const sticky = document.getElementById('adminStickyNote');
             const bell = document.getElementById('stickyBell');
-            
             sticky.classList.add('minimized');
             bell.classList.add('show');
         }
@@ -760,7 +997,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
         function expandSticky() {
             const sticky = document.getElementById('adminStickyNote');
             const bell = document.getElementById('stickyBell');
-            
             sticky.classList.remove('minimized');
             bell.classList.remove('show');
         }
@@ -768,9 +1004,119 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
         function closeSticky() {
             const sticky = document.getElementById('adminStickyNote');
             const bell = document.getElementById('stickyBell');
-            
             sticky.style.display = 'none';
             bell.classList.remove('show');
+        }
+
+        // ========== ADMIN CHAT BOT ==========
+        let chatOpen = false;
+
+        function toggleAdminChat() {
+            const panel = document.getElementById('adminChatPanel');
+            chatOpen = !chatOpen;
+            panel.classList.toggle('open', chatOpen);
+            if (chatOpen) {
+                loadChatMessages();
+                document.getElementById('chatInput').focus();
+            }
+        }
+
+        function loadChatMessages() {
+            fetch('ajax/get_admin_messages.php')
+                .then(r => r.json())
+                .then(data => {
+                    const container = document.getElementById('chatMessages');
+                    container.innerHTML = '';
+
+                    if (!data.messages || data.messages.length === 0) {
+                        container.innerHTML = `
+                            <div class="chat-welcome">
+                                <i class="fas fa-robot" style="font-size:28px;margin-bottom:8px;display:block;color:#0d6efd;"></i>
+                                Hi! I'm the FS Assistant.<br>
+                                Ask me about reports, uploads, passwords, or type<br>
+                                <strong>"talk to admin"</strong> to message the admin team.
+                            </div>`;
+                        return;
+                    }
+
+                    data.messages.forEach(msg => {
+                        const isBot = msg.username === 'SYSTEM';
+                        const isAdmin = msg.is_from_admin == 1 && !isBot;
+                        const bubbleClass = msg.is_from_admin == 1 ? (isBot ? 'bot' : 'admin') : 'user';
+                        const senderLabel = isBot ? 'FS Bot' : (isAdmin ? 'Admin' : 'You');
+
+                        const div = document.createElement('div');
+                        div.className = `chat-bubble ${bubbleClass}`;
+                        div.innerHTML = `
+                            <div>${escapeHtml(msg.message)}</div>
+                            <div class="chat-meta">${senderLabel} • ${formatTime(msg.created_at)}</div>
+                        `;
+                        container.appendChild(div);
+                    });
+
+                    container.scrollTop = container.scrollHeight;
+                })
+                .catch(() => {
+                    document.getElementById('chatMessages').innerHTML = 
+                        '<div class="chat-welcome">Unable to load messages. Please try again.</div>';
+                });
+        }
+
+        function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Optimistic UI
+            const container = document.getElementById('chatMessages');
+            const welcome = container.querySelector('.chat-welcome');
+            if (welcome) welcome.remove();
+
+            const div = document.createElement('div');
+            div.className = 'chat-bubble user';
+            div.innerHTML = `<div>${escapeHtml(message)}</div><div class="chat-meta">You • just now</div>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            input.value = '';
+
+            fetch('ajax/send_admin_message.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    setTimeout(loadChatMessages, 350);
+                } else {
+                    alert(data.message || 'Failed to send message');
+                }
+            })
+            .catch(() => alert('Network error. Please try again.'));
+        }
+
+        // Enter key support
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput) {
+                chatInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') sendChatMessage();
+                });
+            }
+        });
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatTime(datetime) {
+            const d = new Date(datetime);
+            return d.toLocaleString('en-US', {
+                month: 'short', day: 'numeric',
+                hour: 'numeric', minute: '2-digit'
+            });
         }
         
         document.addEventListener('DOMContentLoaded', function() {
@@ -900,7 +1246,7 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                 });
             <?php endif; ?>
 
-            // ========== Admin Sticky Note – Drag ==========
+            // Admin Sticky Note – Drag
             const sticky = document.getElementById('adminStickyNote');
             if (sticky) {
                 const header = sticky.querySelector('.sticky-header');
@@ -908,7 +1254,6 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                 let startX, startY, startLeft, startTop;
 
                 header.addEventListener('mousedown', function (e) {
-                    // Don't start drag if clicking buttons
                     if (e.target.closest('.sticky-btn')) return;
 
                     isDragging = true;

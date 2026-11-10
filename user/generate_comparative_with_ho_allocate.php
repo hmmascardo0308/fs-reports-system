@@ -94,6 +94,22 @@ function isApril2026OrLater(string $month): bool
     return $month_time >= $cutoff;
 }
 
+// Helper function to check if a month is August 2026 or later.
+// From August 2026, ML Properties ( Realty & Brokerage ) is shown as its
+// own group (sort_order 30 / MLP-1) instead of inside Total Other Income
+// (sort_order 23 / TOI-32).
+function isAugust2026OrLater(string $month): bool
+{
+    if (empty($month)) {
+        return false;
+    }
+
+    $cutoff = strtotime('2026-08-01');
+    $month_time = strtotime($month . '-01');
+
+    return $month_time >= $cutoff;
+}
+
 // Helper function to get sort order ranges based on GL code mode
 function getSortOrderRanges(string $gl_code_mode): array
 {
@@ -133,10 +149,10 @@ $old_gl_mapping = [
     'COS-2' => 'COS-5',
     'COS-3' => 'COS-6',
     'COS-4' => 'COS-7',
-
+    
     // MLE mappings
     'MLE-2' => 'MLE-3',
-
+    
     // TAE mappings
     'TAE-15' => 'TAE-16',
     'TAE-16' => 'TAE-17',
@@ -147,7 +163,7 @@ $old_gl_mapping = [
     'TAE-21' => 'TAE-22',
     'TAE-22' => 'TAE-23',
     'TAE-23' => null, // none
-
+    
     // TOI mappings
     'TOI-18' => null, // none
     'TOI-19' => 'TOI-18',
@@ -155,7 +171,7 @@ $old_gl_mapping = [
     'TOI-22' => 'INJ-5',
     'TOI-23' => 'INJ-4',
     'TOI-24' => null, // none
-
+    
     // VEH mappings
     'VEH-5' => 'VEH-6',
     'VEH-6' => 'VEH-7',
@@ -176,7 +192,7 @@ $new_gl_mapping = [
     'COS-2' => 'COS-5',
     'COS-3' => 'COS-6',
     'COS-4' => 'COS-7',
-
+    
     // TAE mappings
     'TAE-15' => 'TAE-16',
     'TAE-16' => 'TAE-17',
@@ -187,7 +203,7 @@ $new_gl_mapping = [
     'TAE-21' => 'TAE-22',
     'TAE-22' => 'TAE-23',
     'TAE-23' => null, // none
-
+    
     // TOI mappings
     'TOI-18' => null, // none
     'TOI-19' => 'TOI-18',
@@ -195,14 +211,14 @@ $new_gl_mapping = [
     'TOI-22' => null, // none
     'TOI-23' => null, // none
     'TOI-24' => null, // none
-
+    
     // VEH mappings
     'VEH-5' => 'VEH-7',
     'VEH-6' => 'VEH-8',
     'VEH-7' => 'VEH-9',
     'VEH-8' => 'VEH-10',
     'VEH-9' => 'VEH-11',
-
+    
     // INS (Insurance) mappings - NEW GL IDs aggregate multiple old GL IDs
     // Array form: TARGET (new) => [SOURCE old GL IDs]
     // Used when reading historical/old-source data into the new structure.
@@ -228,10 +244,12 @@ $valid_filters = false;
 
 // Check for valid period selection combination
 if (!empty($third_period) && (empty($primary_period) || empty($previous_period))) {
+
     $error_message = 'To use Period 3, both Primary and Previous periods must be selected.';
     $show_error = true;
 
 } elseif (!empty($previous_period) && empty($primary_period)) {
+
     $error_message = 'Primary period is required when selecting a Previous period.';
     $show_error = true;
 }
@@ -245,18 +263,29 @@ if (
 
     // Primary period must be greater than previous period
     if (compareMonths($primary_period, $previous_period) <= 0) {
+
         $error_message = 'Primary period must be later than the Previous period.';
         $show_error = true;
     }
 
     // Primary period must be greater than Period 3
-    if (!$show_error && !empty($third_period) && compareMonths($primary_period, $third_period) <= 0) {
+    if (
+        !$show_error &&
+        !empty($third_period) &&
+        compareMonths($primary_period, $third_period) <= 0
+    ) {
+
         $error_message = 'Primary period must be later than Period 3.';
         $show_error = true;
     }
 
     // Period 3 must be 2025 or earlier
-    if (!$show_error && !empty($third_period) && !is2025OrEarlier($third_period)) {
+    if (
+        !$show_error &&
+        !empty($third_period) &&
+        !is2025OrEarlier($third_period)
+    ) {
+
         $error_message = 'Period 3 must be 2025 or earlier.';
         $show_error = true;
     }
@@ -266,8 +295,13 @@ if (
 
         if ($gl_code_mode === 'old') {
 
-            if (!isMarch2026OrEarlier($primary_period) || !isMarch2026OrEarlier($previous_period)) {
-                $error_message = 'Old GL Code is only available for March 2026 and earlier. ' .
+            if (
+                !isMarch2026OrEarlier($primary_period) ||
+                !isMarch2026OrEarlier($previous_period)
+            ) {
+
+                $error_message =
+                    'Old GL Code is only available for March 2026 and earlier. ' .
                     'Both Primary and Previous periods must be March 2026 or earlier.';
 
                 $show_error = true;
@@ -275,8 +309,13 @@ if (
 
         } elseif ($gl_code_mode === 'new') {
 
-            if (!isApril2026OrLater($primary_period) || !isApril2026OrLater($previous_period)) {
-                $error_message = 'New GL Code is only available for April 2026 onwards. ' .
+            if (
+                !isApril2026OrLater($primary_period) ||
+                !isApril2026OrLater($previous_period)
+            ) {
+
+                $error_message =
+                    'New GL Code is only available for April 2026 onwards. ' .
                     'Both Primary and Previous periods must be April 2026 or later.';
 
                 $show_error = true;
@@ -298,7 +337,9 @@ if (
             );
 
             if (!$straddles_cutoff) {
-                $error_message = 'Mix GL Code is only available when the Primary and Previous periods overlap the old/new GL cutoff. ' .
+
+                $error_message =
+                    'Mix GL Code is only available when the Primary and Previous periods overlap the old/new GL cutoff. ' .
                     'One period must be March 2026 or earlier and the other must be April 2026 or later.';
 
                 $show_error = true;
@@ -318,6 +359,26 @@ if (
     header("Location: generate_comparative_with_ho_allocate.php");
     exit;
 }
+
+// ============================================================
+// ML PROPERTIES GROUP FLAG
+// ============================================================
+// When the Primary OR Previous period is August 2026 or later (New / Mix GL):
+//   - TOI-32 "ML Properties ( Realty & Brokerage )" is HIDDEN from
+//     sort_order 23 (Total Other Income)
+//   - MLP-1 (sort_order 30, "ML Properties") is SHOWN as its own group
+//     right after sort_order 7, and is included in TOTAL REVENUES
+//   - TOI-32 amounts from any new-GL period are folded into MLP-1
+// Otherwise the report behaves exactly as before.
+// ============================================================
+
+$ml_properties_group_active = (
+    $gl_code_mode !== 'old' &&
+    (
+        isAugust2026OrLater($primary_period) ||
+        isAugust2026OrLater($previous_period)
+    )
+);
 
 // ============================================================
 // GET GL MAPPING BASED ON GL CODE MODE
@@ -358,6 +419,7 @@ if ($gl_code_mode === 'mixed') {
     if ($res) {
 
         while ($row = mysqli_fetch_assoc($res)) {
+
             $old_gl_id_to_codes[$row['gl_id']][] =
                 trim($row['gl_code']);
         }
@@ -547,6 +609,11 @@ if ($gl_code_mode === 'mixed') {
     'TOI-34' => ['TOI-32'],  // ← old TOI-32
 
     // ============================================================
+    // MLP - ML Properties (sort_order 30, from August 2026)
+    // ============================================================
+    'MLP-1' => [],           // new-only; fed from TOI-32 in fetch_period_data
+
+    // ============================================================
     // COS - Cost of Sales
     // ============================================================
     'COS-1' => ['COS-1'],
@@ -613,7 +680,8 @@ if ($gl_code_mode === 'mixed') {
 // DETERMINE GL STRUCTURE TABLE
 // ============================================================
 
-$table_name = ($gl_code_mode === 'old')
+$table_name =
+    ($gl_code_mode === 'old')
         ? 'fs_reports.gl_codes_ho'
         : 'fs_reports.new_gl_codes_ho';
 
@@ -631,28 +699,52 @@ $gl_structure_query = "
     ORDER BY sort_order ASC, sub_order ASC
 ";
 
-$gl_structure_result = mysqli_query($conn, $gl_structure_query);
+$gl_structure_result =
+    mysqli_query($conn, $gl_structure_query);
 
 if ($gl_structure_result) {
 
     while ($row = mysqli_fetch_assoc($gl_structure_result)) {
-        $key = $row['sort_order'] .
+
+        $key =
+            $row['sort_order'] .
             '|' .
             $row['sub_order'];
 
-        $gl_id = $row['gl_id'] ?? '';
+        $gl_id = trim((string)($row['gl_id'] ?? ''));
 
         /*
          * NEW:
          * Save GL ID for this row.
+         * (Kept for ALL rows, including the hidden MLP-1 / TOI-32 row,
+         * so both IDs are still queried by the data functions.)
          */
         $gl_id_by_key[$key] = $gl_id;
+
+        /*
+         * ML Properties ( Realty & Brokerage ) must only be shown in ONE place:
+         *  - Before August 2026 (or Old GL): inside Total Other Income
+         *    (TOI-32 / sort_order 23). MLP-1 / sort_order 30 is hidden.
+         *  - From August 2026 (New / Mix GL): as its own group
+         *    (MLP-1 / sort_order 30). TOI-32 is hidden from sort_order 23.
+         */
+        if (
+            ($gl_id === 'MLP-1' || (int)($row['sort_order'] ?? 0) === 30) &&
+            !$ml_properties_group_active
+        ) {
+            continue;
+        }
+
+        if ($gl_id === 'TOI-32' && $ml_properties_group_active) {
+            continue;
+        }
 
         if ($gl_id === 'INJ-2') {
             $special_keys[] = $key;
         }
 
         if (!isset($gl_mapping[$key])) {
+
             $gl_mapping[$key] = [
                 'old' => [],
                 'new' => []
@@ -662,21 +754,28 @@ if ($gl_structure_result) {
                 $row['gl_description_comparative'] ?? '';
         }
 
-        $current_code = trim((string)($row['gl_code'] ?? ''));
+        $current_code =
+            trim((string)($row['gl_code'] ?? ''));
 
         if ($gl_code_mode === 'mixed') {
 
             // New code
             if (
                 $current_code !== '' &&
-                !in_array($current_code, $gl_mapping[$key]['new'], true)
+                !in_array(
+                    $current_code,
+                    $gl_mapping[$key]['new'],
+                    true
+                )
             ) {
+
                 $gl_mapping[$key]['new'][] =
                     $current_code;
             }
 
             // Old codes
-            $target_old_ids = $mixed_id_map[$gl_id] ?? [$gl_id];
+            $target_old_ids =
+                $mixed_id_map[$gl_id] ?? [$gl_id];
 
             foreach ($target_old_ids as $oid) {
 
@@ -688,8 +787,13 @@ if ($gl_structure_result) {
                     ) {
 
                         if (
-                            !in_array($oc, $gl_mapping[$key]['old'], true)
+                            !in_array(
+                                $oc,
+                                $gl_mapping[$key]['old'],
+                                true
+                            )
                         ) {
+
                             $gl_mapping[$key]['old'][] =
                                 $oc;
                         }
@@ -703,16 +807,26 @@ if ($gl_structure_result) {
 
                 if (
                     $current_code !== '' &&
-                    !in_array($current_code, $gl_mapping[$key]['old'], true)
+                    !in_array(
+                        $current_code,
+                        $gl_mapping[$key]['old'],
+                        true
+                    )
                 ) {
+
                     $gl_mapping[$key]['old'][] =
                         $current_code;
                 }
 
                 if (
                     $current_code !== '' &&
-                    !in_array($current_code, $gl_mapping[$key]['new'], true)
+                    !in_array(
+                        $current_code,
+                        $gl_mapping[$key]['new'],
+                        true
+                    )
                 ) {
+
                     $gl_mapping[$key]['new'][] =
                         $current_code;
                 }
@@ -721,16 +835,26 @@ if ($gl_structure_result) {
 
                 if (
                     $current_code !== '' &&
-                    !in_array($current_code, $gl_mapping[$key]['new'], true)
+                    !in_array(
+                        $current_code,
+                        $gl_mapping[$key]['new'],
+                        true
+                    )
                 ) {
+
                     $gl_mapping[$key]['new'][] =
                         $current_code;
                 }
 
                 if (
                     $current_code !== '' &&
-                    !in_array($current_code, $gl_mapping[$key]['old'], true)
+                    !in_array(
+                        $current_code,
+                        $gl_mapping[$key]['old'],
+                        true
+                    )
                 ) {
+
                     $gl_mapping[$key]['old'][] =
                         $current_code;
                 }
@@ -745,6 +869,7 @@ if ($gl_structure_result) {
             ) &&
             !empty($row['description'])
         ) {
+
             $sort_order_descriptions[
                 $row['sort_order']
             ] = $row['description'];
@@ -775,16 +900,21 @@ function get_gl_id_total(
 
     foreach ($gl_mapping as $key => $codes_detailed) {
 
-        if (($gl_id_by_key[$key] ?? '') !== $gl_id) {
+        if (
+            ($gl_id_by_key[$key] ?? '') !== $gl_id
+        ) {
             continue;
         }
 
-        $codes = $codes_detailed[$mode] ?? [];
+        $codes =
+            $codes_detailed[$mode] ?? [];
 
         foreach ($codes as $gl_code) {
 
             if (isset($data[$gl_code])) {
-                $total += (float)$data[$gl_code];
+
+                $total +=
+                    (float)$data[$gl_code];
             }
         }
     }
@@ -807,7 +937,8 @@ function compute_table_rows_for_region_area(
     array $mixed_id_map = [],
     array $old_gl_mapping = [],
     array $new_gl_mapping = [],
-    bool $use_real_data = true
+    bool $use_real_data = true,
+    bool $ml_properties_group = false
 ): array {
 
     // ========================================================
@@ -928,6 +1059,94 @@ function compute_table_rows_for_region_area(
     }
 
     // ========================================================
+    // ML PROPERTIES ( Realty & Brokerage ) ON THE SAVED SNAPSHOT
+    // ========================================================
+    // Active (New / Mix GL and Primary OR Previous period is
+    // August 2026 or later):
+    //   - ML Properties is its own group: MLP-1 / sort_order 30,
+    //     shown right after sort_order 7 and counted in TOTAL REVENUES.
+    //   - Any TOI-32 row in the snapshot (e.g. a snapshot saved before
+    //     this change) is folded into MLP-1 and hidden from
+    //     Total Other Income (sort_order 23).
+    // Not active: ML Properties stays inside Total Other Income
+    //   (TOI-32) and the MLP-1 / sort_order 30 group is never shown.
+    // ========================================================
+
+    if ($ml_properties_group) {
+
+        $toi32_p = 0.0;
+        $toi32_prev = 0.0;
+        $toi32_third = 0.0;
+        $has_toi32 = false;
+        $kept_rows = [];
+
+        foreach ($table_rows as $r) {
+            if (($r['gl_id'] ?? '') === 'TOI-32') {
+                $toi32_p += (float)$r['primary_total'];
+                $toi32_prev += (float)$r['previous_total'];
+                $toi32_third += (float)$r['third_total'];
+                $has_toi32 = true;
+                continue;
+            }
+            $kept_rows[] = $r;
+        }
+
+        $table_rows = $kept_rows;
+
+        if ($has_toi32) {
+
+            $mlp_index = null;
+
+            foreach ($table_rows as $i => $r) {
+                if (($r['gl_id'] ?? '') === 'MLP-1') {
+                    $mlp_index = $i;
+                    break;
+                }
+            }
+
+            if ($mlp_index === null) {
+                $table_rows[] = [
+                    'sort_order' => 30,
+                    'sub_order' => 1,
+                    'gl_id' => 'MLP-1',
+                    'gl_description' => 'ML Properties ( Realty & Brokerage )',
+                    'is_section_header' => false,
+                    'is_summary_row' => false,
+                    'primary_total' => $toi32_p,
+                    'previous_total' => $toi32_prev,
+                    'third_total' => $toi32_third,
+                    'is_inj2' => false,
+                ];
+
+                if (!isset($sort_order_descriptions[30])) {
+                    $sort_order_descriptions[30] = 'ML Properties';
+                }
+            } else {
+                $table_rows[$mlp_index]['primary_total'] += $toi32_p;
+                $table_rows[$mlp_index]['previous_total'] += $toi32_prev;
+                $table_rows[$mlp_index]['third_total'] += $toi32_third;
+            }
+        }
+
+    } else {
+
+        // Not active: never show the ML Properties group.
+        $table_rows = array_values(array_filter(
+            $table_rows,
+            static function ($r) {
+                return !(
+                    ($r['gl_id'] ?? '') === 'MLP-1' ||
+                    (int)($r['sort_order'] ?? 0) === 30
+                );
+            }
+        ));
+    }
+
+    if (empty($table_rows)) {
+        return [];
+    }
+
+    // ========================================================
     // GROUP BY SORT ORDER
     // ========================================================
 
@@ -942,6 +1161,39 @@ function compute_table_rows_for_region_area(
 
         $grouped_rows[$sort_order][] =
             $row;
+    }
+
+    // ML Properties group (sort_order 30) only exists when it is active.
+    if (!$ml_properties_group && isset($grouped_rows[30])) {
+        unset($grouped_rows[30]);
+    }
+
+    // ML PROPERTIES: place sort_order 30 right after sort_order 7
+    // (it is the last number in the structure, so by default it would
+    // be rendered at the very bottom, after Provision on Income Tax).
+    if ($ml_properties_group && isset($grouped_rows[30])) {
+
+        $reordered_groups = [];
+
+        foreach ($grouped_rows as $group_sort_order => $group_rows) {
+
+            if ((int)$group_sort_order === 30) {
+                continue;
+            }
+
+            $reordered_groups[$group_sort_order] = $group_rows;
+
+            if ((int)$group_sort_order === 7) {
+                $reordered_groups[30] = $grouped_rows[30];
+            }
+        }
+
+        // Safety: if sort_order 7 was not found, keep 30 at the end.
+        if (!isset($reordered_groups[30])) {
+            $reordered_groups[30] = $grouped_rows[30];
+        }
+
+        $grouped_rows = $reordered_groups;
     }
 
     $final_table_rows = [];
@@ -994,13 +1246,19 @@ function compute_table_rows_for_region_area(
 
         // Hide details for certain sort orders
         $hide_details = ($gl_code_mode === 'old') ? [10, 13] : [11, 14];
-
+        
         if (
-            !in_array((int)$sort_order, $hide_details, true)
+            !in_array(
+                (int)$sort_order,
+                $hide_details,
+                true
+            )
         ) {
 
             foreach ($rows as $row) {
-                $final_table_rows[] = $row;
+
+                $final_table_rows[] =
+                    $row;
             }
         }
 
@@ -1026,6 +1284,7 @@ function compute_table_rows_for_region_area(
         $cos_section_ids = ['COS-4', 'COS-5', 'COS-6', 'COS-7', 'COS-8', 'COS-9'];
 
         if ((int)$sort_order === $inj3_sort_order) {
+
             $total_primary_total  = 0.0;
             $total_previous_total = 0.0;
             $total_third_total    = 0.0;
@@ -1033,17 +1292,25 @@ function compute_table_rows_for_region_area(
             foreach ($rows as $row) {
 
                 if (
-                    in_array(($row['gl_id'] ?? ''), $inj_section_ids, true)
+                    in_array(
+                        ($row['gl_id'] ?? ''),
+                        $inj_section_ids,
+                        true
+                    )
                 ) {
-                    $total_primary_total += (float)($row['primary_total']  ?? 0);
+                    $total_primary_total  +=
+                        (float)($row['primary_total']  ?? 0);
 
-                    $total_previous_total += (float)($row['previous_total'] ?? 0);
+                    $total_previous_total +=
+                        (float)($row['previous_total'] ?? 0);
 
-                    $total_third_total += (float)($row['third_total']    ?? 0);
+                    $total_third_total    +=
+                        (float)($row['third_total']    ?? 0);
                 }
             }
 
         } elseif ((int)$sort_order === $cos_sort_order_local) {
+
             $total_primary_total  = 0.0;
             $total_previous_total = 0.0;
             $total_third_total    = 0.0;
@@ -1051,85 +1318,190 @@ function compute_table_rows_for_region_area(
             foreach ($rows as $row) {
 
                 if (
-                    in_array(($row['gl_id'] ?? ''), $cos_section_ids, true)
+                    in_array(
+                        ($row['gl_id'] ?? ''),
+                        $cos_section_ids,
+                        true
+                    )
                 ) {
-                    $total_primary_total += (float)($row['primary_total']  ?? 0);
+                    $total_primary_total  +=
+                        (float)($row['primary_total']  ?? 0);
 
-                    $total_previous_total += (float)($row['previous_total'] ?? 0);
+                    $total_previous_total +=
+                        (float)($row['previous_total'] ?? 0);
 
-                    $total_third_total += (float)($row['third_total']    ?? 0);
+                    $total_third_total    +=
+                        (float)($row['third_total']    ?? 0);
                 }
             }
 
         } else {
-            $total_primary_total = array_sum(array_column($rows, 'primary_total'));
 
-            $total_previous_total = array_sum(array_column($rows, 'previous_total'));
+            $total_primary_total =
+                array_sum(
+                    array_column(
+                        $rows,
+                        'primary_total'
+                    )
+                );
 
-            $total_third_total = array_sum(array_column($rows, 'third_total'));
+            $total_previous_total =
+                array_sum(
+                    array_column(
+                        $rows,
+                        'previous_total'
+                    )
+                );
+
+            $total_third_total =
+                array_sum(
+                    array_column(
+                        $rows,
+                        'third_total'
+                    )
+                );
         }
 
         // ====================================================
         // TOTAL REVENUES - UPDATED FOR OLD GL
         // ====================================================
-
+        
         $revenue_start = $ranges['revenue_start'];
         $revenue_end = $ranges['revenue_end'];
 
-        if ((int)$sort_order >= $revenue_start && (int)$sort_order <= $revenue_end) {
-            $rev_tot_p += $total_primary_total;
+        // ML Properties (sort_order 30) is a revenue group when active.
+        $is_revenue_group =
+            (
+                (int)$sort_order >= $revenue_start &&
+                (int)$sort_order <= $revenue_end
+            ) ||
+            (
+                $ml_properties_group &&
+                (int)$sort_order === 30
+            );
+        
+        if ($is_revenue_group) {
 
-            $rev_tot_prev += $total_previous_total;
+            $rev_tot_p +=
+                $total_primary_total;
 
-            $rev_tot_third += $total_third_total;
+            $rev_tot_prev +=
+                $total_previous_total;
+
+            $rev_tot_third +=
+                $total_third_total;
         }
 
         // ====================================================
         // SELLING & ADMIN - UPDATED FOR OLD GL
         // ====================================================
-
+        
         $sa_start = $ranges['sa_start'];
         $sa_end = $ranges['sa_end'];
 
-        if ((int)$sort_order === $sa_start || (int)$sort_order === $sa_end) {
-            $sa_tot_p += $total_primary_total;
+        if (
+            (int)$sort_order === $sa_start ||
+            (int)$sort_order === $sa_end
+        ) {
 
-            $sa_tot_prev += $total_previous_total;
+            $sa_tot_p +=
+                $total_primary_total;
 
-            $sa_tot_third += $total_third_total;
+            $sa_tot_prev +=
+                $total_previous_total;
+
+            $sa_tot_third +=
+                $total_third_total;
         }
 
-        $inc_dec = $total_primary_total - $total_previous_total;
+        $inc_dec =
+            $total_primary_total -
+            $total_previous_total;
+
         $percentage = ($total_previous_total != 0)
             ? ($inc_dec / abs($total_previous_total)) * 100
             : ($total_primary_total != 0 ? 100 : 0);
 
-        $inc_dec_third = $total_primary_total - $total_third_total;
-        $percentage_third = (!empty($third_period) && $total_third_total != 0)
-            ? ($inc_dec_third / abs($total_third_total)) * 100
-            : ((!empty($third_period) && $total_primary_total != 0) ? 100 : 0);
+        $inc_dec_third =
+            $total_primary_total -
+            $total_third_total;
 
-        $description = isset($sort_order_descriptions[$sort_order])
-            ? $sort_order_descriptions[$sort_order]
-            : "Total for Sort Order " . $sort_order;
+        $percentage_third =
+            (
+                !empty($third_period) &&
+                $total_third_total != 0
+            )
+                ? (
+                    $inc_dec_third /
+                    abs($total_third_total)
+                ) * 100
+                : (
+                    !empty($third_period) &&
+                    $total_primary_total != 0
+                        ? 100
+                        : 0
+                );
+
+        $description =
+            isset(
+                $sort_order_descriptions[
+                    $sort_order
+                ]
+            )
+                ? $sort_order_descriptions[
+                    $sort_order
+                ]
+                : "Total for Sort Order " .
+                    $sort_order;
 
         // Hide summary for certain sort orders
         $hide_summary = ($gl_code_mode === 'old') ? [26, 27, 28] : [27, 28, 29];
+        
+        if (
+            !in_array(
+                (int)$sort_order,
+                $hide_summary,
+                true
+            )
+        ) {
 
-        if (!in_array((int)$sort_order, $hide_summary, true)) {
             $final_table_rows[] = [
-                'sort_order' => $sort_order,
-                'sub_order' => '',
-                'gl_description' => $description,
-                'is_section_header' => false,
-                'is_summary_row' => true,
-                'primary_total' => $total_primary_total,
-                'previous_total' => $total_previous_total,
-                'third_total' => $total_third_total,
-                'inc_dec' => $inc_dec,
-                'percentage' => $percentage,
-                'inc_dec_third' => $inc_dec_third,
-                'percentage_third' => $percentage_third,
+
+                'sort_order' =>
+                    $sort_order,
+
+                'sub_order' =>
+                    '',
+
+                'gl_description' =>
+                    $description,
+
+                'is_section_header' =>
+                    false,
+
+                'is_summary_row' =>
+                    true,
+
+                'primary_total' =>
+                    $total_primary_total,
+
+                'previous_total' =>
+                    $total_previous_total,
+
+                'third_total' =>
+                    $total_third_total,
+
+                'inc_dec' =>
+                    $inc_dec,
+
+                'percentage' =>
+                    $percentage,
+
+                'inc_dec_third' =>
+                    $inc_dec_third,
+
+                'percentage_third' =>
+                    $percentage_third
             ];
         }
 
@@ -1146,39 +1518,80 @@ function compute_table_rows_for_region_area(
         $emit_total_revenues = ((int)$sort_order === $revenue_end);
 
         if ($emit_total_revenues) {
-            $inc_dec_rev = $rev_tot_p - $rev_tot_prev;
 
-            $pct_rev = $rev_tot_prev != 0
-                    ? (($inc_dec_rev / abs($rev_tot_prev)) * 100)
+            $inc_dec_rev =
+                $rev_tot_p -
+                $rev_tot_prev;
+
+            $pct_rev =
+                $rev_tot_prev != 0
+                    ? (
+                        $inc_dec_rev /
+                        abs($rev_tot_prev)
+                    ) * 100
                     : (
-                        $rev_tot_p != 0 ? 100 : 0
+                        $rev_tot_p != 0
+                            ? 100
+                            : 0
                     );
 
-            $inc_dec_rev_third = $rev_tot_p - $rev_tot_third;
+            $inc_dec_rev_third =
+                $rev_tot_p -
+                $rev_tot_third;
 
-            $pct_rev_third = (
+            $pct_rev_third =
+                (
                     !empty($third_period) &&
                     $rev_tot_third != 0
                 )
-                    ? (($inc_dec_rev_third / abs($rev_tot_third)) * 100)
+                    ? (
+                        $inc_dec_rev_third /
+                        abs($rev_tot_third)
+                    ) * 100
                     : (
                         !empty($third_period) &&
-                        $rev_tot_p != 0 ? 100 : 0
+                        $rev_tot_p != 0
+                            ? 100
+                            : 0
                     );
 
             $final_table_rows[] = [
-                'sort_order' => 'TOTAL REVENUES',
-                'sub_order' => '',
-                'gl_description' => '',
-                'is_section_header' => false,
-                'is_summary_row' => true,
-                'primary_total' => $rev_tot_p,
-                'previous_total' => $rev_tot_prev,
-                'third_total' => $rev_tot_third,
-                'inc_dec' => $inc_dec_rev,
-                'percentage' => $pct_rev,
-                'inc_dec_third' => $inc_dec_rev_third,
-                'percentage_third' => $pct_rev_third
+
+                'sort_order' =>
+                    'TOTAL REVENUES',
+
+                'sub_order' =>
+                    '',
+
+                'gl_description' =>
+                    '',
+
+                'is_section_header' =>
+                    false,
+
+                'is_summary_row' =>
+                    true,
+
+                'primary_total' =>
+                    $rev_tot_p,
+
+                'previous_total' =>
+                    $rev_tot_prev,
+
+                'third_total' =>
+                    $rev_tot_third,
+
+                'inc_dec' =>
+                    $inc_dec_rev,
+
+                'percentage' =>
+                    $pct_rev,
+
+                'inc_dec_third' =>
+                    $inc_dec_rev_third,
+
+                'percentage_third' =>
+                    $pct_rev_third
             ];
 
             if ($gl_code_mode === 'old') {
@@ -1202,34 +1615,57 @@ function compute_table_rows_for_region_area(
         // ====================================================
         // GROSS PROFIT - UPDATED FOR OLD GL
         // ====================================================
-
+        
         $cost_of_sales = $ranges['cost_of_sales'];
 
         if ((int)$sort_order === $cost_of_sales) {
-            $gp_tot_p = $rev_tot_p - $total_primary_total;
 
-            $gp_tot_prev = $rev_tot_prev - $total_previous_total;
+            $gp_tot_p =
+                $rev_tot_p -
+                $total_primary_total;
 
-            $gp_tot_third = $rev_tot_third - $total_third_total;
+            $gp_tot_prev =
+                $rev_tot_prev -
+                $total_previous_total;
 
-            $inc_dec_gp = $gp_tot_p - $gp_tot_prev;
+            $gp_tot_third =
+                $rev_tot_third -
+                $total_third_total;
 
-            $pct_gp = $gp_tot_prev != 0
-                    ? (($inc_dec_gp / abs($gp_tot_prev)) * 100)
+            $inc_dec_gp =
+                $gp_tot_p -
+                $gp_tot_prev;
+
+            $pct_gp =
+                $gp_tot_prev != 0
+                    ? (
+                        $inc_dec_gp /
+                        abs($gp_tot_prev)
+                    ) * 100
                     : (
-                        $gp_tot_p != 0 ? 100 : 0
+                        $gp_tot_p != 0
+                            ? 100
+                            : 0
                     );
 
-            $inc_dec_gp_third = $gp_tot_p - $gp_tot_third;
+            $inc_dec_gp_third =
+                $gp_tot_p -
+                $gp_tot_third;
 
-            $pct_gp_third = (
+            $pct_gp_third =
+                (
                     !empty($third_period) &&
                     $gp_tot_third != 0
                 )
-                    ? (($inc_dec_gp_third / abs($gp_tot_third)) * 100)
+                    ? (
+                        $inc_dec_gp_third /
+                        abs($gp_tot_third)
+                    ) * 100
                     : (
                         !empty($third_period) &&
-                        $gp_tot_p != 0 ? 100 : 0
+                        $gp_tot_p != 0
+                            ? 100
+                            : 0
                     );
 
             // Add spacer above GROSS PROFIT
@@ -1238,153 +1674,313 @@ function compute_table_rows_for_region_area(
             ];
 
             $final_table_rows[] = [
-                'sort_order' => 'GROSS PROFIT',
-                'sub_order' => '',
-                'gl_description' => '',
-                'is_section_header' => false,
-                'is_summary_row' => true,
-                'primary_total' => $gp_tot_p,
-                'previous_total' => $gp_tot_prev,
-                'third_total' => $gp_tot_third,
-                'inc_dec' => $inc_dec_gp,
-                'percentage' => $pct_gp,
-                'inc_dec_third' => $inc_dec_gp_third,
-                'percentage_third' => $pct_gp_third
+
+                'sort_order' =>
+                    'GROSS PROFIT',
+
+                'sub_order' =>
+                    '',
+
+                'gl_description' =>
+                    '',
+
+                'is_section_header' =>
+                    false,
+
+                'is_summary_row' =>
+                    true,
+
+                'primary_total' =>
+                    $gp_tot_p,
+
+                'previous_total' =>
+                    $gp_tot_prev,
+
+                'third_total' =>
+                    $gp_tot_third,
+
+                'inc_dec' =>
+                    $inc_dec_gp,
+
+                'percentage' =>
+                    $pct_gp,
+
+                'inc_dec_third' =>
+                    $inc_dec_gp_third,
+
+                'percentage_third' =>
+                    $pct_gp_third
             ];
 
             $final_table_rows[] = [
-                'sort_order' => 'SELLING & ADMIN EXPENSE',
-                'sub_order' => '',
-                'gl_description' => '',
-                'is_section_header' => true,
-                'is_summary_row' => true,
-                'primary_total' => null,
-                'previous_total' => null,
-                'third_total' => null,
-                'inc_dec' => null,
-                'percentage' => null,
-                'inc_dec_third' => null,
-                'percentage_third' => null
+
+                'sort_order' =>
+                    'SELLING & ADMIN EXPENSE',
+
+                'sub_order' =>
+                    '',
+
+                'gl_description' =>
+                    '',
+
+                'is_section_header' =>
+                    true,
+
+                'is_summary_row' =>
+                    true,
+
+                'primary_total' =>
+                    null,
+
+                'previous_total' =>
+                    null,
+
+                'third_total' =>
+                    null,
+
+                'inc_dec' =>
+                    null,
+
+                'percentage' =>
+                    null,
+
+                'inc_dec_third' =>
+                    null,
+
+                'percentage_third' =>
+                    null
             ];
         }
 
         // ====================================================
         // TOTAL SELLING AND ADMIN EXPENSES - UPDATED FOR OLD GL
         // ====================================================
-
+        
         $sa_end = $ranges['sa_end'];
 
         if ((int)$sort_order === $sa_end) {
-            $inc_dec_sa = $sa_tot_p - $sa_tot_prev;
 
-            $pct_sa = $sa_tot_prev != 0
-                    ? (($inc_dec_sa / abs($sa_tot_prev)) * 100)
+            $inc_dec_sa =
+                $sa_tot_p -
+                $sa_tot_prev;
+
+            $pct_sa =
+                $sa_tot_prev != 0
+                    ? (
+                        $inc_dec_sa /
+                        abs($sa_tot_prev)
+                    ) * 100
                     : (
-                        $sa_tot_p != 0 ? 100 : 0
+                        $sa_tot_p != 0
+                            ? 100
+                            : 0
                     );
 
-            $inc_dec_sa_third = $sa_tot_p - $sa_tot_third;
+            $inc_dec_sa_third =
+                $sa_tot_p -
+                $sa_tot_third;
 
-            $pct_sa_third = (
+            $pct_sa_third =
+                (
                     !empty($third_period) &&
                     $sa_tot_third != 0
                 )
-                    ? (($inc_dec_sa_third / abs($sa_tot_third)) * 100)
+                    ? (
+                        $inc_dec_sa_third /
+                        abs($sa_tot_third)
+                    ) * 100
                     : (
                         !empty($third_period) &&
-                        $sa_tot_p != 0 ? 100 : 0
+                        $sa_tot_p != 0
+                            ? 100
+                            : 0
                     );
 
             $final_table_rows[] = [
-                'sort_order' => 'TOTAL SELLING AND ADMIN EXPENSES',
-                'sub_order' => '',
-                'gl_description' => '',
-                'is_section_header' => false,
-                'is_summary_row' => true,
-                'primary_total' => $sa_tot_p,
-                'previous_total' => $sa_tot_prev,
-                'third_total' => $sa_tot_third,
-                'inc_dec' => $inc_dec_sa,
-                'percentage' => $pct_sa,
-                'inc_dec_third' => $inc_dec_sa_third,
-                'percentage_third' => $pct_sa_third
+
+                'sort_order' =>
+                    'TOTAL SELLING AND ADMIN EXPENSES',
+
+                'sub_order' =>
+                    '',
+
+                'gl_description' =>
+                    '',
+
+                'is_section_header' =>
+                    false,
+
+                'is_summary_row' =>
+                    true,
+
+                'primary_total' =>
+                    $sa_tot_p,
+
+                'previous_total' =>
+                    $sa_tot_prev,
+
+                'third_total' =>
+                    $sa_tot_third,
+
+                'inc_dec' =>
+                    $inc_dec_sa,
+
+                'percentage' =>
+                    $pct_sa,
+
+                'inc_dec_third' =>
+                    $inc_dec_sa_third,
+
+                'percentage_third' =>
+                    $pct_sa_third
             ];
 
             // EBITDA
-            $ebitda_tot_p = $gp_tot_p - $sa_tot_p;
+            $ebitda_tot_p =
+                $gp_tot_p -
+                $sa_tot_p;
 
-            $ebitda_tot_prev = $gp_tot_prev - $sa_tot_prev;
+            $ebitda_tot_prev =
+                $gp_tot_prev -
+                $sa_tot_prev;
 
-            $ebitda_tot_third = $gp_tot_third - $sa_tot_third;
+            $ebitda_tot_third =
+                $gp_tot_third -
+                $sa_tot_third;
 
-            $inc_dec_ebitda = $ebitda_tot_p - $ebitda_tot_prev;
+            $inc_dec_ebitda =
+                $ebitda_tot_p -
+                $ebitda_tot_prev;
 
-            $pct_ebitda = $ebitda_tot_prev != 0
-                    ? (($inc_dec_ebitda / abs($ebitda_tot_prev)) * 100)
+            $pct_ebitda =
+                $ebitda_tot_prev != 0
+                    ? (
+                        $inc_dec_ebitda /
+                        abs($ebitda_tot_prev)
+                    ) * 100
                     : (
-                        $ebitda_tot_p != 0 ? 100 : 0
+                        $ebitda_tot_p != 0
+                            ? 100
+                            : 0
                     );
 
-            $inc_dec_ebitda_third = $ebitda_tot_p - $ebitda_tot_third;
+            $inc_dec_ebitda_third =
+                $ebitda_tot_p -
+                $ebitda_tot_third;
 
-            $pct_ebitda_third = (
+            $pct_ebitda_third =
+                (
                     !empty($third_period) &&
                     $ebitda_tot_third != 0
                 )
-                    ? (($inc_dec_ebitda_third / abs($ebitda_tot_third)) * 100)
+                    ? (
+                        $inc_dec_ebitda_third /
+                        abs($ebitda_tot_third)
+                    ) * 100
                     : (
                         !empty($third_period) &&
-                        $ebitda_tot_p != 0 ? 100 : 0
+                        $ebitda_tot_p != 0
+                            ? 100
+                            : 0
                     );
 
             $final_table_rows[] = [
-                'sort_order' => "EARNINGS BEFORE INTEREST, TAXES, DEP'N, & AMORT",
-                'sub_order' => '',
-                'gl_description' => '',
-                'is_section_header' => false,
-                'is_summary_row' => true,
-                'skip_spacer' => true,
-                'primary_total' => $ebitda_tot_p,
-                'previous_total' => $ebitda_tot_prev,
-                'third_total' => $ebitda_tot_third,
-                'inc_dec' => $inc_dec_ebitda,
-                'percentage' => $pct_ebitda,
-                'inc_dec_third' => $inc_dec_ebitda_third,
-                'percentage_third' => $pct_ebitda_third
+
+                'sort_order' =>
+                    "EARNINGS BEFORE INTEREST, TAXES, DEP'N, & AMORT",
+
+                'sub_order' =>
+                    '',
+
+                'gl_description' =>
+                    '',
+
+                'is_section_header' =>
+                    false,
+
+                'is_summary_row' =>
+                    true,
+
+                'skip_spacer' =>
+                    true,
+
+                'primary_total' =>
+                    $ebitda_tot_p,
+
+                'previous_total' =>
+                    $ebitda_tot_prev,
+
+                'third_total' =>
+                    $ebitda_tot_third,
+
+                'inc_dec' =>
+                    $inc_dec_ebitda,
+
+                'percentage' =>
+                    $pct_ebitda,
+
+                'inc_dec_third' =>
+                    $inc_dec_ebitda_third,
+
+                'percentage_third' =>
+                    $pct_ebitda_third
             ];
         }
 
         // ====================================================
         // EBIT - UPDATED FOR OLD GL
         // ====================================================
-
+        
         $depreciation = $ranges['depreciation'];
 
         if ((int)$sort_order === $depreciation) {
-            $ebit_tot_p = $ebitda_tot_p - $total_primary_total;
 
-            $ebit_tot_prev = $ebitda_tot_prev - $total_previous_total;
+            $ebit_tot_p =
+                $ebitda_tot_p -
+                $total_primary_total;
 
-            $ebit_tot_third = $ebitda_tot_third - $total_third_total;
+            $ebit_tot_prev =
+                $ebitda_tot_prev -
+                $total_previous_total;
 
-            $inc_dec_ebit = $ebit_tot_p - $ebit_tot_prev;
+            $ebit_tot_third =
+                $ebitda_tot_third -
+                $total_third_total;
 
-            $pct_ebit = $ebit_tot_prev != 0
-                    ? (($inc_dec_ebit / abs($ebit_tot_prev)) * 100)
+            $inc_dec_ebit =
+                $ebit_tot_p -
+                $ebit_tot_prev;
+
+            $pct_ebit =
+                $ebit_tot_prev != 0
+                    ? (
+                        $inc_dec_ebit /
+                        abs($ebit_tot_prev)
+                    ) * 100
                     : (
-                        $ebit_tot_p != 0 ? 100 : 0
+                        $ebit_tot_p != 0
+                            ? 100
+                            : 0
                     );
 
-            $inc_dec_ebit_third = $ebit_tot_p - $ebit_tot_third;
+            $inc_dec_ebit_third =
+                $ebit_tot_p -
+                $ebit_tot_third;
 
-            $pct_ebit_third = (
+            $pct_ebit_third =
+                (
                     !empty($third_period) &&
                     $ebit_tot_third != 0
                 )
-                    ? (($inc_dec_ebit_third / abs($ebit_tot_third)) * 100)
+                    ? (
+                        $inc_dec_ebit_third /
+                        abs($ebit_tot_third)
+                    ) * 100
                     : (
                         !empty($third_period) &&
-                        $ebit_tot_p != 0 ? 100 : 0
+                        $ebit_tot_p != 0
+                            ? 100
+                            : 0
                     );
 
             $final_table_rows[] = [
@@ -1392,53 +1988,102 @@ function compute_table_rows_for_region_area(
             ];
 
             $final_table_rows[] = [
-                'sort_order' => 'EARNINGS BEFORE INTEREST & TAXES',
-                'sub_order' => '',
-                'gl_description' => '',
-                'is_section_header' => false,
-                'is_summary_row' => true,
-                'skip_spacer' => true,
-                'primary_total' => $ebit_tot_p,
-                'previous_total' => $ebit_tot_prev,
-                'third_total' => $ebit_tot_third,
-                'inc_dec' => $inc_dec_ebit,
-                'percentage' => $pct_ebit,
-                'inc_dec_third' => $inc_dec_ebit_third,
-                'percentage_third' => $pct_ebit_third
+
+                'sort_order' =>
+                    'EARNINGS BEFORE INTEREST & TAXES',
+
+                'sub_order' =>
+                    '',
+
+                'gl_description' =>
+                    '',
+
+                'is_section_header' =>
+                    false,
+
+                'is_summary_row' =>
+                    true,
+
+                'skip_spacer' =>
+                    true,
+
+                'primary_total' =>
+                    $ebit_tot_p,
+
+                'previous_total' =>
+                    $ebit_tot_prev,
+
+                'third_total' =>
+                    $ebit_tot_third,
+
+                'inc_dec' =>
+                    $inc_dec_ebit,
+
+                'percentage' =>
+                    $pct_ebit,
+
+                'inc_dec_third' =>
+                    $inc_dec_ebit_third,
+
+                'percentage_third' =>
+                    $pct_ebit_third
             ];
         }
 
         // ====================================================
         // EBT - UPDATED FOR OLD GL
         // ====================================================
-
+        
         $interest = $ranges['interest'];
 
         if ((int)$sort_order === $interest) {
-            $ebt_tot_p = $ebit_tot_p - $total_primary_total;
 
-            $ebt_tot_prev = $ebit_tot_prev - $total_previous_total;
+            $ebt_tot_p =
+                $ebit_tot_p -
+                $total_primary_total;
 
-            $ebt_tot_third = $ebit_tot_third - $total_third_total;
+            $ebt_tot_prev =
+                $ebit_tot_prev -
+                $total_previous_total;
 
-            $inc_dec_ebt = $ebt_tot_p - $ebt_tot_prev;
+            $ebt_tot_third =
+                $ebit_tot_third -
+                $total_third_total;
 
-            $pct_ebt = $ebt_tot_prev != 0
-                    ? (($inc_dec_ebt / abs($ebt_tot_prev)) * 100)
+            $inc_dec_ebt =
+                $ebt_tot_p -
+                $ebt_tot_prev;
+
+            $pct_ebt =
+                $ebt_tot_prev != 0
+                    ? (
+                        $inc_dec_ebt /
+                        abs($ebt_tot_prev)
+                    ) * 100
                     : (
-                        $ebt_tot_p != 0 ? 100 : 0
+                        $ebt_tot_p != 0
+                            ? 100
+                            : 0
                     );
 
-            $inc_dec_ebt_third = $ebt_tot_p - $ebt_tot_third;
+            $inc_dec_ebt_third =
+                $ebt_tot_p -
+                $ebt_tot_third;
 
-            $pct_ebt_third = (
+            $pct_ebt_third =
+                (
                     !empty($third_period) &&
                     $ebt_tot_third != 0
                 )
-                    ? (($inc_dec_ebt_third / abs($ebt_tot_third)) * 100)
+                    ? (
+                        $inc_dec_ebt_third /
+                        abs($ebt_tot_third)
+                    ) * 100
                     : (
                         !empty($third_period) &&
-                        $ebt_tot_p != 0 ? 100 : 0
+                        $ebt_tot_p != 0
+                            ? 100
+                            : 0
                     );
 
             $final_table_rows[] = [
@@ -1446,53 +2091,102 @@ function compute_table_rows_for_region_area(
             ];
 
             $final_table_rows[] = [
-                'sort_order' => 'EARNINGS BEFORE TAXES',
-                'sub_order' => '',
-                'gl_description' => '',
-                'is_section_header' => false,
-                'is_summary_row' => true,
-                'skip_spacer' => true,
-                'primary_total' => $ebt_tot_p,
-                'previous_total' => $ebt_tot_prev,
-                'third_total' => $ebt_tot_third,
-                'inc_dec' => $inc_dec_ebt,
-                'percentage' => $pct_ebt,
-                'inc_dec_third' => $inc_dec_ebt_third,
-                'percentage_third' => $pct_ebt_third
+
+                'sort_order' =>
+                    'EARNINGS BEFORE TAXES',
+
+                'sub_order' =>
+                    '',
+
+                'gl_description' =>
+                    '',
+
+                'is_section_header' =>
+                    false,
+
+                'is_summary_row' =>
+                    true,
+
+                'skip_spacer' =>
+                    true,
+
+                'primary_total' =>
+                    $ebt_tot_p,
+
+                'previous_total' =>
+                    $ebt_tot_prev,
+
+                'third_total' =>
+                    $ebt_tot_third,
+
+                'inc_dec' =>
+                    $inc_dec_ebt,
+
+                'percentage' =>
+                    $pct_ebt,
+
+                'inc_dec_third' =>
+                    $inc_dec_ebt_third,
+
+                'percentage_third' =>
+                    $pct_ebt_third
             ];
         }
 
         // ====================================================
         // NET INCOME - UPDATED FOR OLD GL
         // ====================================================
-
+        
         $tax = $ranges['tax'];
 
         if ((int)$sort_order === $tax) {
-            $net_tot_p = $ebt_tot_p - $total_primary_total;
 
-            $net_tot_prev = $ebt_tot_prev - $total_previous_total;
+            $net_tot_p =
+                $ebt_tot_p -
+                $total_primary_total;
 
-            $net_tot_third = $ebt_tot_third - $total_third_total;
+            $net_tot_prev =
+                $ebt_tot_prev -
+                $total_previous_total;
 
-            $inc_dec_net = $net_tot_p - $net_tot_prev;
+            $net_tot_third =
+                $ebt_tot_third -
+                $total_third_total;
 
-            $pct_net = $net_tot_prev != 0
-                    ? (($inc_dec_net / abs($net_tot_prev)) * 100)
+            $inc_dec_net =
+                $net_tot_p -
+                $net_tot_prev;
+
+            $pct_net =
+                $net_tot_prev != 0
+                    ? (
+                        $inc_dec_net /
+                        abs($net_tot_prev)
+                    ) * 100
                     : (
-                        $net_tot_p != 0 ? 100 : 0
+                        $net_tot_p != 0
+                            ? 100
+                            : 0
                     );
 
-            $inc_dec_net_third = $net_tot_p - $net_tot_third;
+            $inc_dec_net_third =
+                $net_tot_p -
+                $net_tot_third;
 
-            $pct_net_third = (
+            $pct_net_third =
+                (
                     !empty($third_period) &&
                     $net_tot_third != 0
                 )
-                    ? (($inc_dec_net_third / abs($net_tot_third)) * 100)
+                    ? (
+                        $inc_dec_net_third /
+                        abs($net_tot_third)
+                    ) * 100
                     : (
                         !empty($third_period) &&
-                        $net_tot_p != 0 ? 100 : 0
+                        $net_tot_p != 0
+                            ? 100
+                            : 0
                     );
 
             $final_table_rows[] = [
@@ -1500,19 +2194,45 @@ function compute_table_rows_for_region_area(
             ];
 
             $final_table_rows[] = [
-                'sort_order' => 'TOTAL NET INCOME/LOSS',
-                'sub_order' => '',
-                'gl_description' => '',
-                'is_section_header' => false,
-                'is_summary_row' => true,
-                'skip_spacer' => true,
-                'primary_total' => $net_tot_p,
-                'previous_total' => $net_tot_prev,
-                'third_total' => $net_tot_third,
-                'inc_dec' => $inc_dec_net,
-                'percentage' => $pct_net,
-                'inc_dec_third' => $inc_dec_net_third,
-                'percentage_third' => $pct_net_third
+
+                'sort_order' =>
+                    'TOTAL NET INCOME/LOSS',
+
+                'sub_order' =>
+                    '',
+
+                'gl_description' =>
+                    '',
+
+                'is_section_header' =>
+                    false,
+
+                'is_summary_row' =>
+                    true,
+
+                'skip_spacer' =>
+                    true,
+
+                'primary_total' =>
+                    $net_tot_p,
+
+                'previous_total' =>
+                    $net_tot_prev,
+
+                'third_total' =>
+                    $net_tot_third,
+
+                'inc_dec' =>
+                    $inc_dec_net,
+
+                'percentage' =>
+                    $pct_net,
+
+                'inc_dec_third' =>
+                    $inc_dec_net_third,
+
+                'percentage_third' =>
+                    $pct_net_third
             ];
         }
     }
@@ -1538,7 +2258,8 @@ $table_rows = compute_table_rows_for_region_area(
         $mixed_id_map,
         $old_gl_mapping,
         $new_gl_mapping,
-        $valid_filters
+        $valid_filters,
+        $ml_properties_group_active
     );
 
 // ============================================================
@@ -1830,8 +2551,11 @@ $show_report_table = (
         <!-- TABLE -->
 
         <div class="region-block">
+
             <div class="tables-scroll">
+
                 <div class="tables-grid">
+
                     <div class="table-container">
 
                         <table class="data-table">
@@ -2009,7 +2733,8 @@ $show_report_table = (
                                             continue;
                                         }
 
-                                        $is_summary_row = isset(
+                                        $is_summary_row =
+                                            isset(
                                                 $row[
                                                     'is_summary_row'
                                                 ]
@@ -2018,25 +2743,32 @@ $show_report_table = (
                                                 'is_summary_row'
                                             ] === true;
 
-                                        $is_header = !empty(
+                                        $is_header =
+                                            !empty(
                                                 $row[
                                                     'is_section_header'
                                                 ]
                                             );
 
-                                        $primary_total = $row[
+                                        $primary_total =
+                                            $row[
                                                 'primary_total'
                                             ] ?? 0;
 
-                                        $previous_total = $row[
+                                        $previous_total =
+                                            $row[
                                                 'previous_total'
                                             ] ?? 0;
 
-                                        $third_total = $row[
+                                        $third_total =
+                                            $row[
                                                 'third_total'
                                             ] ?? 0;
 
-                                        $has_third = !empty($third_period);
+                                        $has_third =
+                                            !empty(
+                                                $third_period
+                                            );
 
                                         // INJ-2 sign flip is already applied when
                                         // building table_rows. For historical Period 3
@@ -2044,25 +2776,44 @@ $show_report_table = (
                                         // as INJ-1 - INJ-2 from past_transaction, with no
                                         // sign flipping in that calculation.
 
-                                        $inc_dec = isset($row['inc_dec'])
+                                        $inc_dec =
+                                            isset(
+                                                $row['inc_dec']
+                                            )
                                                 ? $row['inc_dec']
                                                 : (
                                                     $primary_total -
                                                     $previous_total
                                                 );
 
-                                        if (isset( $row['percentage'] )) {
-                                            $percentage = $row['percentage'];
+                                        if (
+                                            isset(
+                                                $row['percentage']
+                                            )
+                                        ) {
+
+                                            $percentage =
+                                                $row['percentage'];
 
                                         } else {
-                                            $percentage = $previous_total != 0
-                                                    ? (($inc_dec / abs($previous_total)) * 100)
+
+                                            $percentage =
+                                                $previous_total != 0
+                                                    ? (
+                                                        $inc_dec /
+                                                        abs(
+                                                            $previous_total
+                                                        )
+                                                    ) * 100
                                                     : (
-                                                        $primary_total != 0 ? 100 : 0
+                                                        $primary_total != 0
+                                                            ? 100
+                                                            : 0
                                                     );
                                         }
 
-                                        $inc_dec_class = $inc_dec > 0
+                                        $inc_dec_class =
+                                            $inc_dec > 0
                                                 ? 'positive'
                                                 : (
                                                     $inc_dec < 0
@@ -2070,7 +2821,8 @@ $show_report_table = (
                                                         : ''
                                                 );
 
-                                        $percentage_class = $percentage > 0
+                                        $percentage_class =
+                                            $percentage > 0
                                                 ? 'positive'
                                                 : (
                                                     $percentage < 0
@@ -2078,7 +2830,8 @@ $show_report_table = (
                                                         : ''
                                                 );
 
-                                        $inc_dec_third = array_key_exists(
+                                        $inc_dec_third =
+                                            array_key_exists(
                                                 'inc_dec_third',
                                                 $row
                                             )
@@ -2096,23 +2849,35 @@ $show_report_table = (
                                                 $row
                                             )
                                         ) {
-                                            $percentage_third = $row[
+
+                                            $percentage_third =
+                                                $row[
                                                     'percentage_third'
                                                 ];
 
                                         } else {
-                                            $percentage_third = (
+
+                                            $percentage_third =
+                                                (
                                                     $has_third &&
                                                     $third_total != 0
                                                 )
-                                                    ? (($inc_dec_third / abs($third_total)) * 100)
+                                                    ? (
+                                                        $inc_dec_third /
+                                                        abs(
+                                                            $third_total
+                                                        )
+                                                    ) * 100
                                                     : (
                                                         $has_third &&
-                                                        $primary_total != 0 ? 100 : 0
+                                                        $primary_total != 0
+                                                            ? 100
+                                                            : 0
                                                     );
                                         }
 
-                                        $inc_dec_third_class = (
+                                        $inc_dec_third_class =
+                                            (
                                                 $inc_dec_third !== null &&
                                                 $inc_dec_third > 0
                                             )
@@ -2126,7 +2891,8 @@ $show_report_table = (
                                                         : ''
                                                 );
 
-                                        $percentage_third_class = (
+                                        $percentage_third_class =
+                                            (
                                                 $percentage_third !== null &&
                                                 $percentage_third > 0
                                             )
@@ -2177,7 +2943,9 @@ $show_report_table = (
                                                 : '' ?>"
                                         >
                                             <?= $is_summary_row
-                                                ? htmlspecialchars($row['sort_order'])
+                                                ? htmlspecialchars(
+                                                    $row['sort_order']
+                                                )
                                                 : '' ?>
                                         </td>
 
@@ -2190,7 +2958,9 @@ $show_report_table = (
                                             <?php if ($is_header): ?>
 
                                                 <strong>
-                                                    <?= htmlspecialchars($row['sub_order']) ?>
+                                                    <?= htmlspecialchars(
+                                                        $row['sub_order']
+                                                    ) ?>
                                                 </strong>
 
                                             <?php elseif (
@@ -2198,19 +2968,27 @@ $show_report_table = (
                                             ): ?>
 
                                                 <strong>
-                                                    <?= htmlspecialchars($row['gl_description']) ?>
+                                                    <?= htmlspecialchars(
+                                                        $row['gl_description']
+                                                    ) ?>
                                                 </strong>
 
                                             <?php elseif (
-                                                (int)($row['sort_order'] ?? 0) === $inj_sort_order &&
+                                                (int)(
+                                                    $row['sort_order'] ?? 0
+                                                ) === $inj_sort_order &&
                                                 in_array(
-                                                    (int)($row['sub_order'] ?? 0),
+                                                    (int)(
+                                                        $row['sub_order'] ?? 0
+                                                    ),
                                                     [3, 4, 5, 6],
                                                     true
                                                 )
                                             ): ?>
 
-                                                <?= htmlspecialchars($row['gl_description']) ?>
+                                                <?= htmlspecialchars(
+                                                    $row['gl_description']
+                                                ) ?>
 
                                             <?php endif; ?>
 
@@ -2227,9 +3005,13 @@ $show_report_table = (
                                             if (!$is_summary_row) {
 
                                                 if (
-                                                    (int)($row['sort_order'] ?? 0) === $inj_sort_order &&
+                                                    (int)(
+                                                        $row['sort_order'] ?? 0
+                                                    ) === $inj_sort_order &&
                                                     in_array(
-                                                        (int)($row['sub_order'] ?? 0),
+                                                        (int)(
+                                                            $row['sub_order'] ?? 0
+                                                        ),
                                                         [3, 4, 5, 6],
                                                         true
                                                     )
@@ -2423,7 +3205,10 @@ $show_report_table = (
 
                                                 echo '';
 
-                                            } elseif ($percentage >= 1000 || $percentage <= -1000) {
+                                            } elseif (
+                                                $percentage >= 1000 ||
+                                                $percentage <= -1000
+                                            ) {
 
                                                 echo 'mat';
 
@@ -2484,7 +3269,10 @@ $show_report_table = (
 
                                                 echo '';
 
-                                            } elseif ($percentage_third >= 1000 || $percentage_third <= -1000) {
+                                            } elseif (
+                                                $percentage_third >= 1000 ||
+                                                $percentage_third <= -1000
+                                            ) {
 
                                                 echo 'mat';
 
@@ -2513,14 +3301,18 @@ $show_report_table = (
                                     if (
                                         $is_summary_row &&
                                         !$is_header &&
-                                        empty($row['skip_spacer'])
+                                        empty(
+                                            $row['skip_spacer']
+                                        )
                                     ):
 
                                     ?>
 
                                         <tr
                                             class="spacer-row"
-                                            data-spacer-for="<?= htmlspecialchars($row['sort_order'] ?? '') ?>"
+                                            data-spacer-for="<?= htmlspecialchars(
+                                                $row['sort_order'] ?? ''
+                                            ) ?>"
                                             style="height:20px;"
                                         >
 
@@ -2748,7 +3540,10 @@ function validateForm() {
                     )
             );
 
-    if (thirdPeriod && (!primaryPeriod || !previousPeriod)) {
+    if (
+        thirdPeriod &&
+        (!primaryPeriod || !previousPeriod)
+    ) {
 
         showModal(
             'To use Period 3, both Primary and Previous periods must be selected.'
@@ -2757,7 +3552,10 @@ function validateForm() {
         return false;
     }
 
-    if (previousPeriod && !primaryPeriod) {
+    if (
+        previousPeriod &&
+        !primaryPeriod
+    ) {
 
         showModal(
             'Primary period is required when selecting a Previous period.'
@@ -2766,7 +3564,10 @@ function validateForm() {
         return false;
     }
 
-    if (!primaryPeriod || !previousPeriod) {
+    if (
+        !primaryPeriod ||
+        !previousPeriod
+    ) {
 
         return true;
     }
@@ -2801,7 +3602,10 @@ function validateForm() {
     }
 
     // Period 3 must be 2025 or earlier
-    if (thirdPeriod && !is2025OrEarlier(thirdPeriod)) {
+    if (
+        thirdPeriod &&
+        !is2025OrEarlier(thirdPeriod)
+    ) {
 
         showModal(
             'Period 3 must be 2025 or earlier.'
@@ -2888,7 +3692,10 @@ document.addEventListener(
 
         let isCollapsed = false;
 
-        if (collapseBtn) {
+        if (!collapseBtn) {
+            return;
+        }
+
         collapseBtn.addEventListener(
             'click',
             function () {
@@ -2911,13 +3718,13 @@ document.addEventListener(
                     // Get the current GL code mode
                     const glCodeMode = document.querySelector('input[name="gl_code_mode"]:checked');
                     const mode = glCodeMode ? glCodeMode.value : 'new';
-
+                    
                     // Set revenue end based on mode
                     // For old: collapse sort_order 1–22, then keep TOTAL REVENUES visible
                     // For new/mixed: collapse up to 24 (includes Cost of Sales/Service)
                     let revenueEnd;
                     let hideDetails;
-
+                    
                     if (mode === 'old') {
                         revenueEnd = 22;  // sort_order 1–22; TOTAL REVENUES stays visible after them
                         hideDetails = [10, 13];
@@ -2926,6 +3733,17 @@ document.addEventListener(
                         revenueEnd = 23;  // sort_order 1–23; TOTAL REVENUES stays visible after them
                         hideDetails = [11, 14];
                     }
+
+                    // A sort_order belongs to the collapsible revenue area if it is
+                    // 1..revenueEnd, OR it is sort_order 30 (ML Properties, which is
+                    // only rendered in New/Mix mode from August 2026 and is a revenue
+                    // group placed right after sort_order 7).
+                    const inCollapseRange = function (n) {
+                        return !isNaN(n) && (
+                            (n >= 1 && n <= revenueEnd) ||
+                            (mode !== 'old' && n === 30)
+                        );
+                    };
 
                     rows.forEach(
                         row => {
@@ -2952,12 +3770,13 @@ document.addEventListener(
 
                             // Determine if this is in the collapse range
                             const isInCollapseRange =
-                                !isNaN(sortNum) &&
-                                sortNum >= 1 &&
-                                sortNum <= revenueEnd;
+                                inCollapseRange(sortNum);
 
                             // Handle detail rows (sub-rows under each sort order)
-                            if (isInCollapseRange && isDetail) {
+                            if (
+                                isInCollapseRange &&
+                                isDetail
+                            ) {
                                 row.style.display =
                                     isCollapsed
                                         ? 'none'
@@ -2972,7 +3791,9 @@ document.addEventListener(
                                         spacerFor
                                     );
 
-                                if (!isNaN(spacerNum) && spacerNum >= 1 && spacerNum <= revenueEnd) {
+                                if (
+                                    inCollapseRange(spacerNum)
+                                ) {
 
                                     row.style.display =
                                         isCollapsed
@@ -2982,7 +3803,11 @@ document.addEventListener(
                             }
 
                             // Handle revenue header row
-                            if (row.classList.contains( 'revenues-header-row' )) {
+                            if (
+                                row.classList.contains(
+                                    'revenues-header-row'
+                                )
+                            ) {
                                 row.style.display =
                                     isCollapsed
                                         ? 'none'
@@ -2990,7 +3815,11 @@ document.addEventListener(
                             }
 
                             // Handle initial spacer
-                            if (row.classList.contains( 'initial-spacer' )) {
+                            if (
+                                row.classList.contains(
+                                    'initial-spacer'
+                                )
+                            ) {
                                 row.style.display =
                                     isCollapsed
                                         ? 'none'
@@ -3018,7 +3847,10 @@ document.addEventListener(
                             }
 
                             // Hide detail rows for specific sort orders that shouldn't be collapsed
-                            if (isDetail && hideDetails.includes(sortNum)) {
+                            if (
+                                isDetail &&
+                                hideDetails.includes(sortNum)
+                            ) {
                                 if (!isCollapsed) {
                                     row.style.display = '';
                                 } else {
@@ -3040,7 +3872,6 @@ document.addEventListener(
                         : '#4b5563';
             }
         );
-        } // end if (collapseBtn)
     }
 );
 

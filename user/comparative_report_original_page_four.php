@@ -44,6 +44,17 @@ function isApril2026OrLater(string $month): bool {
     return $month_time >= $cutoff;
 }
 
+// Helper function to check if a month is August 2026 or later.
+// From August 2026, ML Properties ( Realty & Brokerage ) is shown as its
+// own group (sort_order 30 / MLP-1) instead of inside Total Other Income
+// (sort_order 23 / TOI-32).
+function isAugust2026OrLater(string $month): bool {
+    if (empty($month)) return false;
+    $cutoff = strtotime('2026-08-01');
+    $month_time = strtotime($month . '-01');
+    return $month_time >= $cutoff;
+}
+
 // Validate GL code mode
 $show_error = false;
 $valid_filters = false;
@@ -71,6 +82,23 @@ if (isset($_GET['reset']) && $_GET['reset'] === '1') {
     header("Location: comparative_report_original_page_four.php");
     exit;
 }
+
+// ============================================================
+// ML PROPERTIES GROUP FLAG
+// ============================================================
+// When the selected period is August 2026 or later (New GL):
+//   - TOI-32 "ML Properties ( Realty & Brokerage )" is HIDDEN from
+//     sort_order 23 (Total Other Income)
+//   - MLP-1 (sort_order 30, "ML Properties") is SHOWN as its own group
+//     right after sort_order 7, and is included in TOTAL REVENUES
+//   - TOI-32 amounts are folded into MLP-1
+// Otherwise ML Properties stays inside Total Other Income and the
+// sort_order 30 group is never shown.
+// ============================================================
+$ml_properties_group_active = (
+    $gl_code_mode === 'new' &&
+    isAugust2026OrLater($selected_period)
+);
 
 // Years dropdown (no mainzone filter)
 $distinct_years = [];
@@ -111,9 +139,27 @@ $gl_structure_result = mysqli_query($conn, $gl_structure_query);
 if ($gl_structure_result) {
     while ($row = mysqli_fetch_assoc($gl_structure_result)) {
         $key = $row['sort_order'] . '|' . $row['sub_order'];
-        $gl_id = $row['gl_id'] ?? '';
+        $gl_id = trim((string)($row['gl_id'] ?? ''));
 
+        // Kept for ALL rows (incl. the hidden MLP-1 / TOI-32 row) so both
+        // IDs are still queried by the data function.
         $gl_id_by_key[$key] = $gl_id;
+
+        // ML Properties ( Realty & Brokerage ) must only be shown in ONE place:
+        //  - Not active: inside Total Other Income (TOI-32 / sort_order 23).
+        //    MLP-1 / sort_order 30 is hidden.
+        //  - Active (New GL, August 2026+): as its own group
+        //    (MLP-1 / sort_order 30). TOI-32 is hidden from sort_order 23.
+        if (
+            ($gl_id === 'MLP-1' || (int)($row['sort_order'] ?? 0) === 30) &&
+            !$ml_properties_group_active
+        ) {
+            continue;
+        }
+
+        if ($gl_id === 'TOI-32' && $ml_properties_group_active) {
+            continue;
+        }
 
         if ($gl_id === 'INJ-2') {
             $special_keys[] = $key;
@@ -488,7 +534,8 @@ function compute_table_rows_for_mainzone(
     array $gl_id_by_key,
     array $old_gl_mapping = [],
     array $new_gl_mapping = [],
-    bool $use_real_data = true
+    bool $use_real_data = true,
+    bool $ml_properties_group = false
 ): array {
     $period_data = [];
     if ($use_real_data && !empty($selected_period)) {
@@ -501,6 +548,23 @@ function compute_table_rows_for_mainzone(
             $old_gl_mapping,
             $new_gl_mapping
         );
+    }
+
+    // ML PROPERTIES: fold TOI-32 into MLP-1 so the amount is shown in the
+    // separate ML Properties group and NOT inside Total Other Income.
+    if ($ml_properties_group) {
+        $mlp_src = $period_data['MLP-1'] ?? ['mlfsi' => 0.0, 'jewelers' => 0.0];
+        $toi_src = $period_data['TOI-32'] ?? ['mlfsi' => 0.0, 'jewelers' => 0.0];
+
+        $mlp_mlfsi = (float)$mlp_src['mlfsi'] + (float)$toi_src['mlfsi'];
+        $mlp_jew   = (float)$mlp_src['jewelers'] + (float)$toi_src['jewelers'];
+
+        $period_data['MLP-1'] = [
+            'mlfsi'    => $mlp_mlfsi,
+            'jewelers' => $mlp_jew,
+            'total'    => $mlp_mlfsi + $mlp_jew,
+        ];
+        unset($period_data['TOI-32']);
     }
 
     // Fetch Head Office value for sort_order=28 / sub_order=1 (old GL) or sort_order=29 / sub_order=1 (new GL)
@@ -570,6 +634,38 @@ function compute_table_rows_for_mainzone(
             $grouped_rows[$sort_order] = [];
         }
         $grouped_rows[$sort_order][] = $row;
+    }
+
+    // ML Properties group (sort_order 30) only exists when it is active.
+    // Safety net: never show it (e.g. at the bottom) otherwise.
+    if (!$ml_properties_group && isset($grouped_rows[30])) {
+        unset($grouped_rows[30]);
+    }
+
+    // ML PROPERTIES: place sort_order 30 right after sort_order 7
+    // (it is the last number in the structure, so by default it would
+    // be rendered at the very bottom).
+    if ($ml_properties_group && isset($grouped_rows[30])) {
+        $reordered_groups = [];
+
+        foreach ($grouped_rows as $group_sort_order => $group_rows) {
+            if ((int)$group_sort_order === 30) {
+                continue;
+            }
+
+            $reordered_groups[$group_sort_order] = $group_rows;
+
+            if ((int)$group_sort_order === 7) {
+                $reordered_groups[30] = $grouped_rows[30];
+            }
+        }
+
+        // Safety: if sort_order 7 was not found, keep 30 at the end.
+        if (!isset($reordered_groups[30])) {
+            $reordered_groups[30] = $grouped_rows[30];
+        }
+
+        $grouped_rows = $reordered_groups;
     }
 
     // ============================================================
@@ -657,7 +753,12 @@ function compute_table_rows_for_mainzone(
         $group_total_with_head = $total_period_mlfsi + $total_period_jewelers + $total_head_office;
 
         // Revenue detail rows (1 to revenue_max_sort_order)
-        if ((int)$sort_order >= 1 && (int)$sort_order <= $revenue_max_sort_order) {
+        // ML Properties (sort_order 30) is a revenue group when active.
+        $is_revenue_group = (
+            ((int)$sort_order >= 1 && (int)$sort_order <= $revenue_max_sort_order) ||
+            ($ml_properties_group && (int)$sort_order === 30)
+        );
+        if ($is_revenue_group) {
             $rev_mlfsi += $total_period_mlfsi;
             $rev_jew += $total_period_jewelers;
             $rev_tot += $group_total_with_head;
@@ -788,8 +889,14 @@ function compute_table_rows_for_mainzone(
     // ============================================================
     
     // STEP 1: Revenue detail rows (sort_order 1 to revenue_max_sort_order)
+    // (+ ML Properties, sort_order 30, which was moved right after sort_order 7)
     foreach ($grouped_rows as $sort_order => $rows) {
-        if ((int)$sort_order >= 1 && (int)$sort_order <= $revenue_max_sort_order) {
+        $is_revenue_group_step = (
+            ((int)$sort_order >= 1 && (int)$sort_order <= $revenue_max_sort_order) ||
+            ($ml_properties_group && (int)$sort_order === 30)
+        );
+
+        if ($is_revenue_group_step) {
             // Check if this sort order should hide detail rows
             $hide_details = false;
             if ($gl_code_mode === 'old' && ((int)$sort_order == 10 || (int)$sort_order == 13)) {
@@ -1119,7 +1226,8 @@ foreach ($fixed_mainzones as $display_name => $filter_mainzone) {
             $gl_id_by_key,
             $old_gl_mapping,
             $new_gl_mapping,
-            $valid_filters
+            $valid_filters,
+            $ml_properties_group_active
         ),
     ];
 }
@@ -1625,6 +1733,16 @@ $header_colors = [
                             // Determine the max sort_order for revenue items
                             // Old GL: 1-22, New GL: 1-23
                             const maxRevenueSortOrder = isOldGl ? 22 : 23;
+
+                            // A sort_order belongs to the collapsible revenue area if it is
+                            // 1..maxRevenueSortOrder, OR it is sort_order 30 (ML Properties,
+                            // only rendered in New GL from August 2026, placed after sort_order 7).
+                            const inRevenueRange = function (n) {
+                                return !isNaN(n) && (
+                                    (n >= 1 && n <= maxRevenueSortOrder) ||
+                                    (!isOldGl && n === 30)
+                                );
+                            };
                             
                             const tbodies = document.querySelectorAll('.report-tbody');
                             tbodies.forEach(tbody => {
@@ -1635,7 +1753,7 @@ $header_colors = [
                                     const spacerFor = row.getAttribute('data-spacer-for');
                                     
                                     const sortNum = parseInt(sortOrder);
-                                    const isRevenue = !isNaN(sortNum) && sortNum >= 1 && sortNum <= maxRevenueSortOrder;
+                                    const isRevenue = inRevenueRange(sortNum);
                                     
                                     // Skip hiding for sort_order 10 and 13 (old) or 11 and 14 (new)
                                     // These are already hidden by PHP
@@ -1656,7 +1774,7 @@ $header_colors = [
                                     
                                     if (spacerFor) {
                                         const spacerNum = parseInt(spacerFor);
-                                        if (!isNaN(spacerNum) && spacerNum >= 1 && spacerNum <= maxRevenueSortOrder) {
+                                        if (inRevenueRange(spacerNum)) {
                                             // Include ALL revenue spacers in collapse/uncollapse
                                             // (including sort_order 10 & 13 for old GL, and 11 & 14 for new GL)
                                             row.style.display = isCollapsed ? 'none' : '';
