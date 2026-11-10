@@ -643,6 +643,26 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                                 <i class="fas fa-file-invoice-dollar"></i> COMPARATIVE GROSS INCOME REPORT Page 6
                             </a>
                         </li>
+
+                        <li>
+                            <a href="comparative_report_original_page_seven.php">
+                                <i class="fas fa-file-invoice-dollar"></i> COMPARATIVE GROSS INCOME REPORT Page 7
+                            </a>
+                        </li>
+
+                        <li>
+                            <a href="comparative_report_original_page_eight.php">
+                                <i class="fas fa-file-invoice-dollar"></i> COMPARATIVE P&L STATEMENT Page 8
+                            </a>
+                        </li>
+
+                        <li>
+                            <a href="comparative_report_original_page_nine.php">
+                                <i class="fas fa-file-invoice-dollar"></i> COMPARATIVE P&L STATEMENT Page 9
+                            </a>
+                        </li>
+
+
                     </ul>
                 </li>
             <?php endif; ?>
