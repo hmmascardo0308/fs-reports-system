@@ -662,6 +662,12 @@ if (isset($_SESSION['password_change_success']) && $_SESSION['password_change_su
                             </a>
                         </li>
 
+                        <li>
+                            <a href="comparative_report_original_page_ten_eleven.php">
+                                <i class="fas fa-file-invoice-dollar"></i> COMPARATIVE P&L STATEMENT Page 10-11
+                            </a>
+                        </li>
+
 
                     </ul>
                 </li>

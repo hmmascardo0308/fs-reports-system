@@ -1,5 +1,5 @@
 <?php
-// generate_comparative_with_ho_allocate.php
+// comparative_report_original_page_eight.php
 session_start();
 require_once __DIR__ . '/../config/config.php';
 
@@ -356,7 +356,7 @@ if (
     isset($_GET['reset']) &&
     $_GET['reset'] === '1'
 ) {
-    header("Location: generate_comparative_with_ho_allocate.php");
+    header("Location: comparative_report_original_page_eight.php");
     exit;
 }
 

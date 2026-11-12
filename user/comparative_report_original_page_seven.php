@@ -345,7 +345,7 @@ if (
     isset($_GET['reset']) &&
     $_GET['reset'] === '1'
 ) {
-    header("Location: comparative_report_original_ho_with_past_and_adjustment.php");
+    header("Location: comparative_report_original_page_seven.php");
     exit;
 }
 
